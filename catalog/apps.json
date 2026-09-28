@@ -1,0 +1,26 @@
+[
+  {
+    "id": "Google.Chrome.EXE",
+    "title": "Google Chrome",
+    "description": "Google web tarayıcısı.",
+    "category": "İnternet"
+  },
+  {
+    "id": "Microsoft.VisualStudioCode",
+    "title": "Visual Studio Code",
+    "description": "Kaynak kodu düzenleyicisi.",
+    "category": "Geliştirme"
+  },
+  {
+    "id": "Git.Git",
+    "title": "Git",
+    "description": "Sürüm kontrol aracı.",
+    "category": "Geliştirme"
+  },
+  {
+    "id": "Obsidian.Obsidian",
+    "title": "Obsidian",
+    "description": "Yerel Markdown not uygulaması.",
+    "category": "Üretkenlik"
+  }
+]

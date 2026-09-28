@@ -1,0 +1,22 @@
+# Local working plan
+/plan.md
+
+# Local builds and run output
+/ReAppKit.exe
+/dist/
+/runs/
+*.exe
+*.test
+*.out
+*.log
+
+# Personal settings and credentials
+/settings.json
+/*.local.json
+.env
+.env.*
+!.env.example
+*.pfx
+*.p12
+*.pem
+*.key
