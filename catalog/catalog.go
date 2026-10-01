@@ -21,6 +21,7 @@ type App struct {
 	Description   string `json:"description"`
 	Category      string `json:"category"`
 	Scope         string `json:"scope,omitempty"`
+	Source        string `json:"source,omitempty"`
 	RequiresAdmin bool   `json:"requires_admin,omitempty"`
 }
 
@@ -57,6 +58,15 @@ func LoadApps(path string) ([]App, error) {
 		}
 		if app.Scope == "" {
 			app.Scope = "user"
+		}
+		if app.Source == "" {
+			app.Source = "winget"
+		}
+		if app.Source != "winget" && app.Source != "msstore" {
+			return nil, fmt.Errorf("app %d has unsupported source %q", i+1, app.Source)
+		}
+		if app.Source == "msstore" && (app.Scope != "user" || app.RequiresAdmin) {
+			return nil, fmt.Errorf("app %d: Microsoft Store apps must run in the user process with user scope", i+1)
 		}
 		if app.Scope != "user" && app.Scope != "machine" && app.Scope != "auto" {
 			return nil, fmt.Errorf("app %d has invalid scope %q (must be user, machine or auto)", i+1, app.Scope)

@@ -41,6 +41,9 @@ func TestAdminPlanRejectsUnsafeScopeAddressAndIDs(t *testing.T) {
 	p = validPlan()
 	p.Apps = append(p.Apps, p.Apps[0])
 	bad = append(bad, p)
+	p = validPlan()
+	p.Apps[0].Source = "msstore"
+	bad = append(bad, p)
 	for _, p := range bad {
 		if _, err := decodeAdminPlan(encode(p)); err == nil {
 			t.Fatalf("accepted=%+v", p)

@@ -7,12 +7,13 @@ ReAppKit, Windows bilgisayarı uygulamalar ve kişisel ayarlar için iki termina
 ## Mevcut MVP
 
 - Windows 11 x64 hedeflenir. Derlenen çalıştırılabilir dosyanın hedef bilgisayarda Go kurulumuna ihtiyacı yoktur.
-- Başlangıç WinGet kataloğunda Chrome, VS Code, Git, Obsidian ve WezTerm bulunur. WezTerm `scope: "auto"` kullanır: WinGet komutuna `--scope` gönderilmez; kurucu yönetici izni gerektirir ve arayüzde işaretlenir. Farklı bir JSON uygulama kataloğu verilebilir.
+- Katalogda 20 uygulama bulunur: Chrome, VS Code, Git, Obsidian, WezTerm, WhatsApp, Brave, ChatGPT, Sublime Text, Notion, Spotify, MarkText, WinRAR, Okular, DBeaver Community, PowerToys, Espanso, LibreOffice, Thunderbird ve TranslucentTB. [Katalog referansı](catalog/README.md) paket kimliklerini, kaynakları ve doğrulanan kapsamları içerir. Farklı bir JSON uygulama kataloğu verilebilir.
+- Uzun uygulama listelerinde PgUp/PgDn, Home/End ve fare tekerleği kullanılabilir. Uzun özet ve sonuç ekranları yön tuşları, PgUp/PgDn veya fare tekerleğiyle kaydırılabilir.
 - Program varsayılan olarak **demo modunda** açılır. Seçim, özet ve sonuç akışını gösterir; bilgisayarı değiştirmez.
-- `--apply`, ancak kullanıcı seçim yapıp özet ekranında ayrıca onay verince gerçek işlemleri açar. Chrome, VS Code ve Obsidian kullanıcı kapsamında; Git machine kapsamında kurulur. Kurulu olanlar atlanır; bir işin hatası bağımsız işleri durdurmaz.
+- `--apply`, ancak kullanıcı seçim yapıp özet ekranında ayrıca onay verince gerçek işlemleri açar. Git, Sublime Text, WinRAR, LibreOffice ve Thunderbird machine kapsamında başlangıç UAC işçisinde kurulur; WezTerm aynı işçide auto kapsamını kullanır. Diğer hazır uygulamalar kullanıcı sürecinde çalışır. Kurulu olanlar atlanır; bir işin hatası bağımsız işleri durdurmaz.
 - İsteğe bağlı ayar kataloğu, kullanıcının verdiği yapılandırma dosyalarını kopyalar. Hedef dosya varsa değiştirmeden önce yanında yedek oluşturur. Kişisel kaynak ve hedef yolları bilinmediği için hazır ayar sunulmaz.
 - Makine tarafından okunabilir sonuçlar varsayılan olarak `%LOCALAPPDATA%\ReAppKit\runs` konumuna yazılır. `--results-dir` ile değiştirilebilir.
-- Özet onayından sonra UAC veya dosya değişikliği başlamadan WinGet/Windows desteği ve seçilen uygulamaların kurulu durumu kontrol edilir. Eksik uygulama varsa varsayılan WinGet CDN sunucusuna süre sınırlı HTTPS bağlantı kontrolü yapılır. Kontrol başarısızsa işlem açıklamayla durur; yeniden onaylayarak tekrar denenebilir. Yalnız yerel dosya işi seçilmişse, ayar bir uygulamayı gerektirmedikçe WinGet veya internet aranmaz.
+- Özet onayından sonra UAC veya dosya değişikliği başlamadan WinGet/Windows desteği ve seçilen uygulamaların kurulu durumu kontrol edilir. Eksik uygulama varsa ilgili WinGet CDN veya Microsoft Store sunucusuna süre sınırlı HTTPS kontrolü yapılır. Kontrol başarısızsa işlem açıklamayla durur; yeniden onaylayarak tekrar denenebilir. Yalnız yerel dosya işi seçilmişse, ayar bir uygulamayı gerektirmedikçe WinGet veya internet aranmaz.
 
 ## Derleme ve deneme
 
@@ -49,7 +50,9 @@ Kaynak ve hedefi kendi bilgisayarındaki mutlak yollarla değiştir. `requires_a
 
 ## Şimdiki sınırlar
 
-Bağlantı kontrolü varsayılan WinGet CDN sunucusunu sınar; bütün kurucu indirme adreslerini veya özel WinGet kaynaklarını doğrulamaz. Kurulum başarısını garanti etmez. Ek HTTPS kontrolü atlandığında bile kurulu uygulama sorgusu WinGet kaynak erişimine ihtiyaç duyabilir.
+WhatsApp ve ChatGPT `msstore`, diğer hazır uygulamalar `winget` kaynağını kullanır. Katalogda `source: "winget"` (varsayılan) veya `source: "msstore"` seçilebilir. Store uygulamaları kullanıcı sürecinde kalır ve kapsam bayrağı gönderilmez. Kaynak koşulları henüz incelenmediyse ön kontrol hatası, PowerShell'de koşulları incelemek için çalıştırılacak tam komutu gösterir. ReAppKit kaynak veya paket koşullarını otomatik kabul etmez. Yeni uygulamalar ve gerçek Store kurulumları temiz Windows VM testi gerektirir.
+
+Bağlantı kontrolü seçilen hazır kaynakların sunucusunu sınar; bütün kurucu indirme adreslerini veya özel WinGet kaynaklarını doğrulamaz. Kurulum başarısını garanti etmez. Ek HTTPS kontrolü atlandığında bile kurulu uygulama sorgusu kaynak erişimine ihtiyaç duyabilir.
 
 Chrome, VS Code ve Obsidian kullanıcı kapsamında, Git tüm kullanıcılar için machine kapsamında kurulur. Katalogdaki `scope` alanı `user`, `machine` veya `auto` olabilir; boş alan `user` olur. `auto` kurucu seçimini WinGet’e bırakır, kullanıcı kapsamı garantisi vermez ve yönetici uyarısı gösterir. Kurulum başlamadan tek Windows UAC onayı alınır; normal uygulamalar kullanıcı sürecinde, yönetici işleri geçici yönetici işçisinde sırayla çalışır. Profiller, yeniden başlatma sonrası devam ve Windows ses/kayıt defteri ayarları henüz yoktur. Bazı üçüncü taraf yükleyiciler yine de yönetici izni isteyebilir; devam etmek istemiyorsan bu istemi iptal et. Uygulama kurulumu için WinGet gerekir. Ayrı lisans kabulü isteyen paketler etkileşimsiz modda başarısız olabilir; ReAppKit paket anlaşmalarını otomatik kabul etmez. Sonuç ekranındaki `r`, özete dönüp yeniden onaylama olanağı verir; tamamlanmış işler kontrol edilip atlanır. Onay öncesi kurulu durumu gösterme henüz yoktur. Yerel dosya kopyalama akışı doğrulandı. Windows VM'de Chrome, VS Code, Git ve Obsidian kurulum işleri başarı bildirdi; tekrar çalıştırma ve temiz Windows kabulü açık kaldı. Windows Uygulama Denetimi ilk yerel derlemeyi engelledi, sonraki imzasız derleme geliştirme bilgisayarında açıldı; bu nedenle çalıştırma davranışı her cihazda doğrulanmalıdır.
 

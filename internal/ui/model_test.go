@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -12,66 +13,170 @@ func press(m Model, key tea.KeyPressMsg) (Model, tea.Cmd) {
 	return next.(Model), cmd
 }
 
+func TestSpecificStoreAgreementGuidanceDoesNotSuggestChrome(t *testing.T) {
+	m := NewModel(nil, nil, func(Selection) tea.Cmd { return nil })
+	m.screen = resultsScreen
+	m.results = []Result{{Title: "ChatGPT", Status: "failed", Message: "WinGet source agreements require your review: run winget list --id 9NT1R1C2HH7J --exact --source msstore"}}
+	view := m.content()
+	if !strings.Contains(view, "9NT1R1C2HH7J") || strings.Contains(view, "Google.Chrome") {
+		t.Fatalf("misleading Store guidance: %s", view)
+	}
+}
+
+func TestLargeCatalogPagesKeyboardWheelAndMouseKeepCorrectIDs(t *testing.T) {
+	var apps []Choice
+	for i := 0; i < 20; i++ {
+		apps = append(apps, Choice{ID: fmt.Sprintf("app-%02d", i), Title: fmt.Sprintf("App %02d", i)})
+	}
+	m := NewModel(apps, nil, nil)
+	m.height = 20
+	next, _ := m.updateKey("pgdown")
+	m = next.(Model)
+	if m.cursor != 8 || !strings.Contains(m.View().Content, "App 08") || strings.Contains(m.View().Content, "App 00") {
+		t.Fatalf("page cursor=%d view=%s", m.cursor, m.View().Content)
+	}
+	next, _ = m.Update(tea.MouseClickMsg(tea.Mouse{X: 4, Y: 6, Button: tea.MouseLeft}))
+	m = next.(Model)
+	if got := m.Selected(); len(got.Apps) != 1 || got.Apps[0].ID != "app-08" {
+		t.Fatalf("mouse selected wrong page item: %+v", got)
+	}
+	next, _ = m.Update(tea.MouseWheelMsg(tea.Mouse{Button: tea.MouseWheelDown}))
+	m = next.(Model)
+	if m.cursor != 11 {
+		t.Fatalf("wheel cursor=%d", m.cursor)
+	}
+	next, _ = m.updateKey("end")
+	m = next.(Model)
+	next, _ = m.updateKey("space")
+	m = next.(Model)
+	if got := m.Selected(); len(got.Apps) != 2 || got.Apps[1].ID != "app-19" {
+		t.Fatalf("last app unreachable: %+v", got)
+	}
+	next, _ = m.Update(tea.WindowSizeMsg{Width: 80, Height: 16})
+	m = next.(Model)
+	if m.cursor != 19 || !strings.Contains(m.View().Content, "App 19") {
+		t.Fatal("resize lost visible cursor")
+	}
+}
+
+func TestLongSummaryScrollAndMouseConfirmation(t *testing.T) {
+	calls := 0
+	var apps []Choice
+	for i := 0; i < 20; i++ {
+		apps = append(apps, Choice{ID: fmt.Sprintf("app-%d", i), Title: fmt.Sprintf("App %d", i)})
+	}
+	m := NewModel(apps, nil, func(Selection) tea.Cmd { calls++; return func() tea.Msg { return ResultsMsg{} } })
+	for _, app := range apps {
+		m.selected[selectionKey(appsScreen, app.ID)] = true
+	}
+	m.screen = summaryScreen
+	m.height = 18
+	m.scrollContent(100)
+	lines := strings.Split(m.View().Content, "\n")
+	button := -1
+	for i, line := range lines {
+		if strings.Contains(line, "[Enter ile onayla ve başlat]") {
+			button = i
+			break
+		}
+	}
+	if button < 0 || len(lines) > m.height {
+		t.Fatalf("summary not scrollable: %s", m.View().Content)
+	}
+	_, cmd := m.Update(tea.MouseClickMsg(tea.Mouse{X: 70, Y: button, Button: tea.MouseLeft}))
+	if calls != 1 || cmd == nil {
+		t.Fatalf("scrolled confirmation calls=%d cmd=%v", calls, cmd)
+	}
+}
+
 func TestSelectionSurvivesBackAndNext(t *testing.T) {
-	apps := []Choice{{ID:"git", Title:"Git"}}
-	settings := []Choice{{ID:"wallpaper", Title:"Wallpaper"}}
+	apps := []Choice{{ID: "git", Title: "Git"}}
+	settings := []Choice{{ID: "wallpaper", Title: "Wallpaper"}}
 	m := NewModel(apps, settings, nil)
-	m, _ = press(m, tea.KeyPressMsg(tea.Key{Code:tea.KeySpace}))
-	m, _ = press(m, tea.KeyPressMsg(tea.Key{Code:tea.KeyTab}))
-	m, _ = press(m, tea.KeyPressMsg(tea.Key{Code:tea.KeySpace}))
-	m, _ = press(m, tea.KeyPressMsg(tea.Key{Code:tea.KeyBackspace}))
-	if got := m.Selected(); len(got.Apps) != 1 || got.Apps[0].ID != "git" { t.Fatalf("app selection lost: %#v", got.Apps) }
-	m, _ = press(m, tea.KeyPressMsg(tea.Key{Code:tea.KeyTab}))
-	if got := m.Selected(); len(got.Settings) != 1 || got.Settings[0].ID != "wallpaper" { t.Fatalf("setting selection lost: %#v", got.Settings) }
+	m, _ = press(m, tea.KeyPressMsg(tea.Key{Code: tea.KeySpace}))
+	m, _ = press(m, tea.KeyPressMsg(tea.Key{Code: tea.KeyTab}))
+	m, _ = press(m, tea.KeyPressMsg(tea.Key{Code: tea.KeySpace}))
+	m, _ = press(m, tea.KeyPressMsg(tea.Key{Code: tea.KeyBackspace}))
+	if got := m.Selected(); len(got.Apps) != 1 || got.Apps[0].ID != "git" {
+		t.Fatalf("app selection lost: %#v", got.Apps)
+	}
+	m, _ = press(m, tea.KeyPressMsg(tea.Key{Code: tea.KeyTab}))
+	if got := m.Selected(); len(got.Settings) != 1 || got.Settings[0].ID != "wallpaper" {
+		t.Fatalf("setting selection lost: %#v", got.Settings)
+	}
 }
 
 func TestConfirmCallbackRequiresSummaryEnterAndRunsOnce(t *testing.T) {
 	calls := 0
-	m := NewModel([]Choice{{ID:"git", Title:"Git"}}, nil, func(Selection) tea.Cmd { calls++; return func() tea.Msg { return ResultsMsg{} } })
-	m, _ = press(m, tea.KeyPressMsg(tea.Key{Code:tea.KeySpace}))
-	m, _ = press(m, tea.KeyPressMsg(tea.Key{Code:tea.KeyTab}))
-	if calls != 0 { t.Fatal("callback ran before summary") }
-	m, _ = press(m, tea.KeyPressMsg(tea.Key{Code:tea.KeyTab}))
-	if calls != 0 { t.Fatal("callback ran while navigating to summary") }
-	m, cmd := press(m, tea.KeyPressMsg(tea.Key{Code:tea.KeyEnter}))
-	if calls != 1 || cmd == nil { t.Fatalf("callback calls=%d, cmd=%v", calls, cmd) }
-	_, _ = press(m, tea.KeyPressMsg(tea.Key{Code:tea.KeyEnter}))
-	if calls != 1 { t.Fatalf("callback ran %d times", calls) }
+	m := NewModel([]Choice{{ID: "git", Title: "Git"}}, nil, func(Selection) tea.Cmd { calls++; return func() tea.Msg { return ResultsMsg{} } })
+	m, _ = press(m, tea.KeyPressMsg(tea.Key{Code: tea.KeySpace}))
+	m, _ = press(m, tea.KeyPressMsg(tea.Key{Code: tea.KeyTab}))
+	if calls != 0 {
+		t.Fatal("callback ran before summary")
+	}
+	m, _ = press(m, tea.KeyPressMsg(tea.Key{Code: tea.KeyTab}))
+	if calls != 0 {
+		t.Fatal("callback ran while navigating to summary")
+	}
+	m, cmd := press(m, tea.KeyPressMsg(tea.Key{Code: tea.KeyEnter}))
+	if calls != 1 || cmd == nil {
+		t.Fatalf("callback calls=%d, cmd=%v", calls, cmd)
+	}
+	_, _ = press(m, tea.KeyPressMsg(tea.Key{Code: tea.KeyEnter}))
+	if calls != 1 {
+		t.Fatalf("callback ran %d times", calls)
+	}
 }
 
 func TestDemoConfirmationShowsResultsWithoutSystemCallback(t *testing.T) {
-	m := NewModel([]Choice{{ID:"git", Title:"Git"}}, nil, nil)
-	m, _ = press(m, tea.KeyPressMsg(tea.Key{Code:tea.KeySpace}))
-	m, _ = press(m, tea.KeyPressMsg(tea.Key{Code:tea.KeyTab}))
-	m, _ = press(m, tea.KeyPressMsg(tea.Key{Code:tea.KeyTab}))
-	m, _ = press(m, tea.KeyPressMsg(tea.Key{Code:tea.KeyEnter}))
-	if m.screen != resultsScreen { t.Fatalf("screen=%v, want results", m.screen) }
-	if len(m.results) != 1 || m.results[0].Status != "Demo" { t.Fatalf("unexpected results: %#v", m.results) }
+	m := NewModel([]Choice{{ID: "git", Title: "Git"}}, nil, nil)
+	m, _ = press(m, tea.KeyPressMsg(tea.Key{Code: tea.KeySpace}))
+	m, _ = press(m, tea.KeyPressMsg(tea.Key{Code: tea.KeyTab}))
+	m, _ = press(m, tea.KeyPressMsg(tea.Key{Code: tea.KeyTab}))
+	m, _ = press(m, tea.KeyPressMsg(tea.Key{Code: tea.KeyEnter}))
+	if m.screen != resultsScreen {
+		t.Fatalf("screen=%v, want results", m.screen)
+	}
+	if len(m.results) != 1 || m.results[0].Status != "Demo" {
+		t.Fatalf("unexpected results: %#v", m.results)
+	}
 }
 
 func TestMouseTogglesVisibleChoiceAndEmptySectionCanContinue(t *testing.T) {
-	m := NewModel([]Choice{{ID:"shared", Title:"App"}}, []Choice{{ID:"shared", Title:"Setting"}}, nil)
-	next, _ := m.Update(tea.MouseClickMsg(tea.Mouse{X:4, Y:6, Button:tea.MouseLeft}))
+	m := NewModel([]Choice{{ID: "shared", Title: "App"}}, []Choice{{ID: "shared", Title: "Setting"}}, nil)
+	next, _ := m.Update(tea.MouseClickMsg(tea.Mouse{X: 4, Y: 6, Button: tea.MouseLeft}))
 	m = next.(Model)
-	if got := m.Selected(); len(got.Apps) != 1 { t.Fatalf("mouse did not select app: %#v", got) }
-	m, _ = press(m, tea.KeyPressMsg(tea.Key{Code:tea.KeyTab}))
-	m, _ = press(m, tea.KeyPressMsg(tea.Key{Code:tea.KeyTab}))
-	if m.screen != summaryScreen { t.Fatalf("screen=%v, want summary", m.screen) }
-	if got := m.Selected(); len(got.Apps) != 1 || len(got.Settings) != 0 { t.Fatalf("same IDs collided across screens: %#v", got) }
+	if got := m.Selected(); len(got.Apps) != 1 {
+		t.Fatalf("mouse did not select app: %#v", got)
+	}
+	m, _ = press(m, tea.KeyPressMsg(tea.Key{Code: tea.KeyTab}))
+	m, _ = press(m, tea.KeyPressMsg(tea.Key{Code: tea.KeyTab}))
+	if m.screen != summaryScreen {
+		t.Fatalf("screen=%v, want summary", m.screen)
+	}
+	if got := m.Selected(); len(got.Apps) != 1 || len(got.Settings) != 0 {
+		t.Fatalf("same IDs collided across screens: %#v", got)
+	}
 
 	empty := NewModel(nil, nil, nil)
-	empty, _ = press(empty, tea.KeyPressMsg(tea.Key{Code:tea.KeyTab}))
-	next, _ = empty.Update(tea.MouseClickMsg(tea.Mouse{X:70, Y:9, Button:tea.MouseLeft}))
-	if next.(Model).screen != summaryScreen { t.Fatalf("empty settings continue click did not open summary") }
+	empty, _ = press(empty, tea.KeyPressMsg(tea.Key{Code: tea.KeyTab}))
+	next, _ = empty.Update(tea.MouseClickMsg(tea.Mouse{X: 70, Y: 9, Button: tea.MouseLeft}))
+	if next.(Model).screen != summaryScreen {
+		t.Fatalf("empty settings continue click did not open summary")
+	}
 }
 
 func TestSummaryMouseConfirmLineMatchesRenderedLayout(t *testing.T) {
-	m := NewModel([]Choice{{ID:"a", Title:"A"}}, nil, nil)
-	m, _ = press(m, tea.KeyPressMsg(tea.Key{Code:tea.KeyTab}))
-	m, _ = press(m, tea.KeyPressMsg(tea.Key{Code:tea.KeyTab}))
-	if got := m.summaryActionLine(); got != 9 { t.Fatalf("demo summary button line=%d, want 9", got) }
+	m := NewModel([]Choice{{ID: "a", Title: "A"}}, nil, nil)
+	m, _ = press(m, tea.KeyPressMsg(tea.Key{Code: tea.KeyTab}))
+	m, _ = press(m, tea.KeyPressMsg(tea.Key{Code: tea.KeyTab}))
+	if got := m.summaryActionLine(); got != 9 {
+		t.Fatalf("demo summary button line=%d, want 9", got)
+	}
 	m.selected[selectionKey(appsScreen, "a")] = true
-	if got := m.summaryActionLine(); got != 9 { t.Fatalf("selected demo summary button line=%d, want 9", got) }
+	if got := m.summaryActionLine(); got != 9 {
+		t.Fatalf("selected demo summary button line=%d, want 9", got)
+	}
 }
 
 func TestResultsWrapWinGetAgreementErrorAndShowInteractiveHint(t *testing.T) {

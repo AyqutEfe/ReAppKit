@@ -19,7 +19,29 @@ type Runner interface {
 	Run(context.Context, ...string) ([]byte, error)
 }
 
-type Client struct{ runner Runner }
+type Client struct {
+	runner Runner
+	source string
+}
+
+// WithSource leaves the original client unchanged so mixed plans remain isolated.
+func (c *Client) WithSource(source string) *Client {
+	return &Client{runner: c.runner, source: source}
+}
+
+func (c *Client) sourceName() string {
+	if c.source == "" {
+		return "winget"
+	}
+	return c.source
+}
+
+func (c *Client) validateSource() error {
+	if source := c.sourceName(); source != "winget" && source != "msstore" {
+		return fmt.Errorf("unsupported WinGet source %q", source)
+	}
+	return nil
+}
 
 func New(runner Runner) *Client {
 	if runner == nil {
@@ -83,6 +105,9 @@ func validateID(id string) error {
 }
 
 func (c *Client) Installed(ctx context.Context, id string) (bool, error) {
+	if err := c.validateSource(); err != nil {
+		return false, err
+	}
 	if err := validateID(id); err != nil {
 		return false, err
 	}
@@ -92,14 +117,14 @@ func (c *Client) Installed(ctx context.Context, id string) (bool, error) {
 	// Restrict lookup to the same catalog used for installation. Without a
 	// source, WinGet also opens msstore, whose first-use agreement can fail a
 	// non-interactive check before it can report installed applications.
-	output, err := c.runner.Run(ctx, "list", "--id", id, "--exact", "--source", "winget", "--disable-interactivity")
+	output, err := c.runner.Run(ctx, "list", "--id", id, "--exact", "--source", c.sourceName(), "--disable-interactivity")
 	if err != nil {
 		var exitErr interface{ ExitCode() int }
 		if errors.As(err, &exitErr) && uint32(exitErr.ExitCode()) == 0x8A150014 {
 			return false, nil
 		}
 		if sourceAgreementRequired(err) {
-			return false, sourceAgreementError(id)
+			return false, sourceAgreementError(id, c.sourceName())
 		}
 		return false, fmt.Errorf("WinGet list %s: %w: %s", id, err, strings.TrimSpace(string(output)))
 	}
@@ -120,6 +145,9 @@ func (c *Client) Installed(ctx context.Context, id string) (bool, error) {
 }
 
 func (c *Client) Install(ctx context.Context, id string, scopes ...string) error {
+	if err := c.validateSource(); err != nil {
+		return err
+	}
 	scope := "user"
 	if len(scopes) > 0 && scopes[0] != "" {
 		scope = scopes[0]
@@ -130,13 +158,16 @@ func (c *Client) Install(ctx context.Context, id string, scopes ...string) error
 	if scope != "user" && scope != "machine" && scope != "auto" {
 		return fmt.Errorf("invalid WinGet install scope %q", scope)
 	}
+	if c.sourceName() == "msstore" && scope != "user" {
+		return errors.New("Microsoft Store apps require the original user process and user scope")
+	}
 	if err := c.Available(ctx); err != nil {
 		return err
 	}
-	args := []string{"install", "--id", id, "--exact", "--source", "winget"}
+	args := []string{"install", "--id", id, "--exact", "--source", c.sourceName()}
 	// Some manifests (including WezTerm) omit Scope. An explicit scope then
 	// filters out their installer; auto lets WinGet select without this filter.
-	if scope != "auto" {
+	if scope != "auto" && c.sourceName() != "msstore" {
 		args = append(args, "--scope", scope)
 	}
 	args = append(args, "--silent", "--disable-interactivity")
@@ -146,7 +177,7 @@ func (c *Client) Install(ctx context.Context, id string, scopes ...string) error
 			return fmt.Errorf("%s kurulumu iptal edildi veya Windows izin isteği tamamlanamadı; yeniden denemede UAC penceresini kontrol edip onaylayın: %w: %s", id, err, strings.TrimSpace(string(output)))
 		}
 		if sourceAgreementRequired(err) {
-			return sourceAgreementError(id)
+			return sourceAgreementError(id, c.sourceName())
 		}
 		if noApplicableInstaller(err) && scope == "auto" {
 			return fmt.Errorf("WinGet has no applicable installer for %s without a scope filter; check architecture, Windows version and WinGet logs: %w: %s", id, err, strings.TrimSpace(string(output)))
@@ -169,8 +200,8 @@ func sourceAgreementRequired(err error) bool {
 	return errors.As(err, &exitErr) && uint32(exitErr.ExitCode()) == 0x8A150046
 }
 
-func sourceAgreementError(id string) error {
-	return fmt.Errorf("WinGet source agreements require your review: run `winget list --id %s --exact --source winget` in PowerShell, review and accept the terms, then retry ReAppKit", id)
+func sourceAgreementError(id, source string) error {
+	return fmt.Errorf("WinGet source agreements require your review: run `winget list --id %s --exact --source %s` in PowerShell, review and accept the terms, then retry ReAppKit", id, source)
 }
 
 // A generic installer failure alone does not prove an elevation cancellation.

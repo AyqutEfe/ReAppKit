@@ -14,6 +14,47 @@ type fakeRunner struct {
 	err    error
 }
 
+func TestMicrosoftStoreSourceIsolationAndNoScopeOrAutomaticAgreements(t *testing.T) {
+	f := &fakeRunner{output: []byte("ChatGPT 9NT1R1C2HH7J 1 msstore\n")}
+	base := New(f)
+	store := base.WithSource("msstore")
+	installed, err := store.Installed(context.Background(), "9NT1R1C2HH7J")
+	if err != nil || !installed {
+		t.Fatalf("installed=%v error=%v", installed, err)
+	}
+	if f.calls[1][5] != "msstore" {
+		t.Fatalf("Store query=%v", f.calls[1])
+	}
+	if err := store.Install(context.Background(), "9NT1R1C2HH7J"); err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"install", "--id", "9NT1R1C2HH7J", "--exact", "--source", "msstore", "--silent", "--disable-interactivity"}
+	if !reflect.DeepEqual(f.calls[3], want) {
+		t.Fatalf("Store install=%v", f.calls[3])
+	}
+	if base.sourceName() != "winget" {
+		t.Fatal("Store client changed base source")
+	}
+	f.err = codeError(-1978335162)
+	_, err = store.Installed(context.Background(), "9NT1R1C2HH7J")
+	if err == nil || !strings.Contains(err.Error(), "--source msstore") {
+		t.Fatalf("agreement guidance=%v", err)
+	}
+}
+
+func TestInvalidSourceAndStoreMachineScopeNeverRun(t *testing.T) {
+	f := &fakeRunner{}
+	if err := New(f).WithSource("msstore").Install(context.Background(), "9NT1R1C2HH7J", "machine"); err == nil {
+		t.Fatal("Store machine scope accepted")
+	}
+	if _, err := New(f).WithSource("unknown").Installed(context.Background(), "Test.App"); err == nil {
+		t.Fatal("unknown source accepted")
+	}
+	if len(f.calls) != 0 {
+		t.Fatalf("invalid request ran: %v", f.calls)
+	}
+}
+
 func (f *fakeRunner) Run(_ context.Context, args ...string) ([]byte, error) {
 	f.calls = append(f.calls, append([]string(nil), args...))
 	if len(args) > 0 && args[0] == "--version" {

@@ -45,7 +45,7 @@ func validateAdminApps(apps []catalog.App) (map[string]string, error) {
 	}
 	allowed := make(map[string]string)
 	for _, app := range apps {
-		if !adminPackageID.MatchString(app.ID) || !app.RequiresAdmin || (app.Scope != "machine" && app.Scope != "auto") {
+		if !adminPackageID.MatchString(app.ID) || !app.RequiresAdmin || (app.Scope != "machine" && app.Scope != "auto") || (app.Source != "" && app.Source != "winget") {
 			return nil, fmt.Errorf("%s: yönetici işçisi yalnız machine/auto kapsamlı yönetici paketlerini kurabilir", app.ID)
 		}
 		if _, exists := allowed[app.ID]; exists {

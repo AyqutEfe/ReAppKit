@@ -17,16 +17,17 @@ type adminSession interface {
 	Close() error
 }
 type executionCommand struct {
-	ctx        context.Context
-	selection  ui.Selection
-	apps       []catalog.App
-	settings   []catalog.Setting
-	client     *winget.Client
-	resultsDir string
-	stdout     io.Writer
-	result     tea.Msg
-	startAdmin func(context.Context, []catalog.App) (adminSession, error)
-	checkNetwork func(context.Context) error
+	ctx               context.Context
+	selection         ui.Selection
+	apps              []catalog.App
+	settings          []catalog.Setting
+	client            *winget.Client
+	resultsDir        string
+	stdout            io.Writer
+	result            tea.Msg
+	startAdmin        func(context.Context, []catalog.App) (adminSession, error)
+	checkNetwork      func(context.Context) error
+	checkStoreNetwork func(context.Context) error
 }
 
 var _ tea.ExecCommand = (*executionCommand)(nil)

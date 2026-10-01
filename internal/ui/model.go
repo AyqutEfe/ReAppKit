@@ -55,16 +55,18 @@ const (
 
 // Model owns the UI state. It never performs system changes itself.
 type Model struct {
-	apps     []Choice
-	settings []Choice
-	selected map[string]bool
-	confirm  ConfirmFunc
-	screen   screen
-	cursor   int
-	width    int
-	busy     bool
-	results  []Result
-	message  string
+	apps       []Choice
+	settings   []Choice
+	selected   map[string]bool
+	confirm    ConfirmFunc
+	screen     screen
+	cursor     int
+	width      int
+	height     int
+	viewOffset int
+	busy       bool
+	results    []Result
+	message    string
 }
 
 // NewModel creates the UI with caller-provided catalog data. Passing a nil
@@ -78,6 +80,7 @@ func NewModel(apps, settings []Choice, confirm ConfirmFunc) Model {
 		confirm:  confirm,
 		screen:   appsScreen,
 		width:    80,
+		height:   24,
 	}
 }
 
@@ -103,12 +106,29 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
+		m.height = msg.Height
 		if m.width < 40 {
 			m.width = 40
 		}
 	case tea.MouseClickMsg:
 		return m.updateMouse(msg)
+	case tea.MouseWheelMsg:
+		if !m.busy && (m.screen == appsScreen || m.screen == settingsScreen) {
+			delta := 3
+			if msg.Button == tea.MouseWheelUp {
+				delta = -3
+			}
+			m.cursor = clampCursor(m.cursor+delta, len(m.currentChoices()))
+		} else if !m.busy && (m.screen == summaryScreen || m.screen == resultsScreen) {
+			delta := 3
+			if msg.Button == tea.MouseWheelUp {
+				delta = -3
+			}
+			m.scrollContent(delta)
+		}
+		return m, nil
 	case ResultsMsg:
+		m.viewOffset = 0
 		m.results = append([]Result(nil), msg.Results...)
 		m.screen = resultsScreen
 		m.busy = false
@@ -135,6 +155,22 @@ func (m Model) updateKey(key string) (tea.Model, tea.Cmd) {
 	if m.busy {
 		return m, nil
 	}
+	if m.screen == summaryScreen || m.screen == resultsScreen {
+		switch key {
+		case "up", "k":
+			m.scrollContent(-1)
+			return m, nil
+		case "down", "j":
+			m.scrollContent(1)
+			return m, nil
+		case "pgup":
+			m.scrollContent(-m.contentPageSize())
+			return m, nil
+		case "pgdown":
+			m.scrollContent(m.contentPageSize())
+			return m, nil
+		}
+	}
 	switch m.screen {
 	case appsScreen, settingsScreen:
 		items := m.currentChoices()
@@ -147,6 +183,14 @@ func (m Model) updateKey(key string) (tea.Model, tea.Cmd) {
 			if m.cursor < len(items)-1 {
 				m.cursor++
 			}
+		case "pgdown":
+			m.cursor = clampCursor(m.cursor+m.choicePageSize(), len(items))
+		case "pgup":
+			m.cursor = clampCursor(m.cursor-m.choicePageSize(), len(items))
+		case "home":
+			m.cursor = 0
+		case "end":
+			m.cursor = clampCursor(len(items)-1, len(items))
 		case " ", "space", "enter":
 			m.toggleCursor()
 		case "right", "tab", "n":
@@ -168,6 +212,7 @@ func (m Model) updateKey(key string) (tea.Model, tea.Cmd) {
 	case resultsScreen:
 		if key == "r" && m.confirm != nil {
 			m.screen = summaryScreen
+			m.viewOffset = 0
 			m.message = "Yeniden onaylarsan tamamlanmış işler durum kontrolüyle atlanır."
 			return m, nil
 		}
@@ -183,6 +228,7 @@ func (m Model) confirmSelection() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	m.busy = true
+	m.viewOffset = 0
 	m.message = ""
 	if m.confirm == nil {
 		m.results = demoResults(m.selection())
@@ -220,16 +266,20 @@ func (m Model) updateMouse(msg tea.MouseClickMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	y := msg.Y
+	if m.screen == summaryScreen || m.screen == resultsScreen {
+		y += m.scrollStart()
+	}
 	switch m.screen {
 	case appsScreen, settingsScreen:
 		items := m.currentChoices()
+		start, end := m.choicePageBounds(len(items))
 		const firstChoiceLine = 6
-		if y >= firstChoiceLine && y < firstChoiceLine+len(items) {
-			m.cursor = y - firstChoiceLine
+		if y >= firstChoiceLine && y < firstChoiceLine+end-start {
+			m.cursor = start + y - firstChoiceLine
 			m.toggleCursor()
 			return m, nil
 		}
-		displayedRows := len(items)
+		displayedRows := end - start
 		if displayedRows == 0 {
 			displayedRows = 1 // the empty-state message occupies a row
 		}
@@ -253,7 +303,7 @@ func (m Model) updateMouse(msg tea.MouseClickMsg) (tea.Model, tea.Cmd) {
 			return m.confirmSelection()
 		}
 	case resultsScreen:
-		if y == 4 {
+		if y == len(strings.Split(strings.TrimSuffix(m.content(), "\n"), "\n"))-1 {
 			return m, tea.Quit
 		}
 	}
@@ -268,6 +318,7 @@ func (m *Model) nextScreen() {
 	}
 	if m.screen == settingsScreen {
 		m.screen = summaryScreen
+		m.viewOffset = 0
 		m.cursor = 0
 	}
 }
@@ -277,6 +328,27 @@ func (m Model) currentChoices() []Choice {
 		return m.settings
 	}
 	return m.apps
+}
+
+func (m Model) choicePageSize() int {
+	rows := m.height - 12
+	if rows < 3 {
+		rows = 3
+	}
+	return rows
+}
+
+func (m Model) choicePageBounds(length int) (int, int) {
+	if length == 0 {
+		return 0, 0
+	}
+	rows := m.choicePageSize()
+	start := clampCursor(m.cursor, length) / rows * rows
+	end := start + rows
+	if end > length {
+		end = length
+	}
+	return start, end
 }
 
 func (m *Model) toggleCursor() {
@@ -359,7 +431,7 @@ func clampCursor(cursor, length int) int {
 }
 
 // View implements tea.Model.
-func (m Model) View() tea.View {
+func (m Model) content() string {
 	var b strings.Builder
 	switch m.screen {
 	case appsScreen:
@@ -371,19 +443,63 @@ func (m Model) View() tea.View {
 	case resultsScreen:
 		m.writeResults(&b)
 	}
-	v := tea.NewView(b.String())
+	return b.String()
+}
+
+func (m Model) contentPageSize() int {
+	rows := m.height - 2
+	if rows < 3 {
+		rows = 3
+	}
+	return rows
+}
+
+func (m Model) scrollStart() int {
+	count := len(strings.Split(strings.TrimSuffix(m.content(), "\n"), "\n"))
+	maximum := count - m.contentPageSize()
+	if maximum < 0 {
+		maximum = 0
+	}
+	offset := m.viewOffset
+	if offset < 0 {
+		offset = 0
+	}
+	if offset > maximum {
+		offset = maximum
+	}
+	return offset
+}
+
+func (m *Model) scrollContent(delta int) {
+	m.viewOffset = m.scrollStart() + delta
+	m.viewOffset = m.scrollStart()
+}
+
+func (m Model) View() tea.View {
+	content := m.content()
+	if m.screen == summaryScreen || m.screen == resultsScreen {
+		lines := strings.Split(strings.TrimSuffix(content, "\n"), "\n")
+		if len(lines) > m.contentPageSize() {
+			start := m.scrollStart()
+			end := start + m.contentPageSize()
+			content = strings.Join(lines[start:end], "\n")
+			content += "\n" + fit(fmt.Sprintf("↑/↓ · PgUp/PgDn (%d–%d/%d)", start+1, end, len(lines)), m.width)
+		}
+	}
+	v := tea.NewView(content)
 	v.MouseMode = tea.MouseModeCellMotion
 	return v
 }
 
 func (m Model) writeChoices(b *strings.Builder, title, step string, items []Choice, help string, canBack bool) {
-	fmt.Fprintf(b, "ReAppKit · %s\n\n%s\n\n%s\n\n", title, step, help)
+	fmt.Fprintf(b, "ReAppKit · %s\n\n%s\n\n%s\n\n", title, fit(step, m.width), fit(help, m.width))
 	if len(items) == 0 {
 		b.WriteString("  Bu bölümde örnek bulunmuyor.\n")
 	}
-	for i, c := range items {
+	start, end := m.choicePageBounds(len(items))
+	for i, c := range items[start:end] {
 		cursor := "  "
-		if i == m.cursor {
+		if start+i == m.cursor {
 			cursor = "› "
 		}
 		check := "[ ]"
@@ -403,7 +519,11 @@ func (m Model) writeChoices(b *strings.Builder, title, step string, items []Choi
 		}
 		fmt.Fprintf(b, "%s%s %s\n", cursor, check, fit(label, m.width-10))
 	}
-	fmt.Fprintf(b, "\nSeçili: %d\n", len(m.currentSelection()))
+	selectionLabel := fmt.Sprintf("Seçili: %d", len(m.currentSelection()))
+	if len(items) > m.choicePageSize() {
+		selectionLabel += fmt.Sprintf(" · %d–%d/%d · PgUp/PgDn", start+1, end, len(items))
+	}
+	fmt.Fprintf(b, "\n%s\n", fit(selectionLabel, m.width))
 	if canBack {
 		b.WriteString("[← Geri]   ")
 	}
@@ -425,18 +545,18 @@ func (m Model) writeSummary(b *strings.Builder) {
 	for _, c := range sel.Apps {
 		adminTag := ""
 		if c.RequiresAdmin {
-			adminTag = " (Yönetici izni / UAC gerektirir)"
+			adminTag = " [Yönetici]"
 			hasAdmin = true
 		}
-		fmt.Fprintf(b, "  • Uygulama: %s%s\n", fit(c.Title, m.width-16-len(adminTag)), adminTag)
+		fmt.Fprintf(b, "  • Uygulama: %s%s\n", fit(c.Title, m.width-16-len([]rune(adminTag))), adminTag)
 	}
 	for _, c := range sel.Settings {
 		fmt.Fprintf(b, "  • Ayar: %s\n", fit(c.Title, m.width-16))
 	}
 	if hasAdmin {
-		b.WriteString("\n⚠️ Başlangıçta tek Windows UAC onayı alınır; ardından kurulumlar sırayla sürer.\n")
+		fmt.Fprintf(b, "\n%s\n", fit("Başlangıçta tek UAC onayı; sonra sırayla kurulum.", m.width))
 	}
-	b.WriteString("\nEnter ile açıkça onaylayınca işlem başlatılır.\n")
+	b.WriteString("\nEnter ile onaylayınca işlem başlatılır.\n")
 	if m.confirm == nil {
 		b.WriteString("Demo modu: sistemde değişiklik yapılmaz.\n")
 	}
@@ -449,7 +569,11 @@ func (m Model) writeSummary(b *strings.Builder) {
 			fmt.Fprintln(b, line)
 		}
 	}
-	b.WriteString("\n[← Geri]   [Enter ile onayla ve başlat]\n\n←/Backspace geri · Enter onay · q çık\n")
+	actions := "[← Geri]   [Enter ile onayla ve başlat]"
+	if m.width < 45 {
+		actions = "[← Geri]   [Enter: başlat]"
+	}
+	fmt.Fprintf(b, "\n%s\n\n←/Backspace geri · Enter onay · q çık\n", actions)
 }
 
 func (m Model) writeResults(b *strings.Builder) {
@@ -466,7 +590,7 @@ func (m Model) writeResults(b *strings.Builder) {
 				fmt.Fprintf(b, "      %s\n", line)
 			}
 			lower := strings.ToLower(r.Message)
-			if strings.Contains(lower, "msstore") && (strings.Contains(lower, "8a150046") || strings.Contains(lower, "agreement") || strings.Contains(lower, "view the following")) {
+			if !strings.Contains(lower, "winget list --id") && strings.Contains(lower, "msstore") && (strings.Contains(lower, "8a150046") || strings.Contains(lower, "agreement") || strings.Contains(lower, "view the following")) {
 				showSourceHint = true
 			}
 		}
@@ -483,7 +607,7 @@ func (m Model) writeResults(b *strings.Builder) {
 		}
 	}
 	if m.confirm == nil {
-		b.WriteString("\nDemo modu: bu oturum sistemde değişiklik yapmadı.\n")
+		b.WriteString("\nDemo: bu oturum değişiklik yapmadı.\n")
 	}
 	if m.confirm != nil {
 		b.WriteString("\nr: yeniden denemek için özete dön.\n")

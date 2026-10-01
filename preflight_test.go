@@ -47,33 +47,57 @@ func TestConnectivityTransportErrorPreservesCause(t *testing.T) {
 func TestNetworkFailureBeforeUACInstallsAndFileChanges(t *testing.T) {
 	c, r := sampleCommand(t)
 	source, target := filepath.Join(t.TempDir(), "source"), filepath.Join(t.TempDir(), "target")
-	if err := os.WriteFile(source, []byte("new"), 0600); err != nil { t.Fatal(err) }
-	if err := os.WriteFile(target, []byte("old"), 0600); err != nil { t.Fatal(err) }
+	if err := os.WriteFile(source, []byte("new"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(target, []byte("old"), 0600); err != nil {
+		t.Fatal(err)
+	}
 	c.settings = []catalog.Setting{{ID: "profile", Title: "Profile", Source: source, Target: target}}
 	c.selection.Settings = []ui.Choice{{ID: "setting:profile"}}
 	failure := errors.New("offline")
 	c.checkNetwork = func(ctx context.Context) error {
-		if _, ok := ctx.Deadline(); !ok { t.Fatal("network probe has no deadline") }
+		if _, ok := ctx.Deadline(); !ok {
+			t.Fatal("network probe has no deadline")
+		}
 		return failure
 	}
-	c.startAdmin = func(context.Context, []catalog.App) (adminSession, error) { t.Fatal("UAC before network check"); return nil, nil }
-	if err := c.Run(); err != nil { t.Fatal(err) }
+	c.startAdmin = func(context.Context, []catalog.App) (adminSession, error) {
+		t.Fatal("UAC before network check")
+		return nil, nil
+	}
+	if err := c.Run(); err != nil {
+		t.Fatal(err)
+	}
 	msg, ok := c.result.(ui.ExecutionErrorMsg)
-	if !ok || !errors.Is(msg.Err, failure) || len(r.installs) != 0 { t.Fatalf("result=%+v installs=%v", c.result, r.installs) }
+	if !ok || !errors.Is(msg.Err, failure) || len(r.installs) != 0 {
+		t.Fatalf("result=%+v installs=%v", c.result, r.installs)
+	}
 	data, err := os.ReadFile(target)
-	if err != nil || string(data) != "old" { t.Fatalf("target=%q error=%v", data, err) }
+	if err != nil || string(data) != "old" {
+		t.Fatalf("target=%q error=%v", data, err)
+	}
 	entries, err := os.ReadDir(c.resultsDir)
-	if err != nil || len(entries) != 0 { t.Fatalf("unexpected results: %v %v", entries, err) }
+	if err != nil || len(entries) != 0 {
+		t.Fatalf("unexpected results: %v %v", entries, err)
+	}
 }
 
 func TestInstalledAppsDoNotRequireConnectivity(t *testing.T) {
 	c, r := sampleCommand(t)
-	for _, app := range c.apps { r.installed[app.ID] = true }
+	for _, app := range c.apps {
+		r.installed[app.ID] = true
+	}
 	c.checkNetwork = func(context.Context) error { t.Fatal("network probe for installed apps"); return nil }
-	c.startAdmin = func(context.Context, []catalog.App) (adminSession, error) { t.Fatal("UAC for installed apps"); return nil, nil }
+	c.startAdmin = func(context.Context, []catalog.App) (adminSession, error) {
+		t.Fatal("UAC for installed apps")
+		return nil, nil
+	}
 	c.Run()
 	for _, row := range c.result.(ui.ResultsMsg).Results {
-		if row.Status != "skipped" { t.Fatalf("result=%+v", c.result) }
+		if row.Status != "skipped" {
+			t.Fatalf("result=%+v", c.result)
+		}
 	}
 }
 
@@ -90,13 +114,17 @@ func TestFileOnlyRunDoesNotRequireWinGetOrNetwork(t *testing.T) {
 	c.client = winget.New(r)
 	c.selection.Apps = nil
 	source, target := filepath.Join(t.TempDir(), "source"), filepath.Join(t.TempDir(), "target")
-	if err := os.WriteFile(source, []byte("profile"), 0600); err != nil { t.Fatal(err) }
+	if err := os.WriteFile(source, []byte("profile"), 0600); err != nil {
+		t.Fatal(err)
+	}
 	c.settings = []catalog.Setting{{ID: "profile", Title: "Profile", Source: source, Target: target}}
 	c.selection.Settings = []ui.Choice{{ID: "setting:profile"}}
 	c.checkNetwork = func(context.Context) error { t.Fatal("network probe for local files"); return nil }
 	c.Run()
 	data, err := os.ReadFile(target)
-	if err != nil || string(data) != "profile" || r.calls != 0 { t.Fatalf("target=%q error=%v WinGet calls=%d", data, err, r.calls) }
+	if err != nil || string(data) != "profile" || r.calls != 0 {
+		t.Fatalf("target=%q error=%v WinGet calls=%d", data, err, r.calls)
+	}
 }
 
 func TestMissingWinGetBlocksUserAppBeforeAnyChanges(t *testing.T) {
@@ -107,7 +135,9 @@ func TestMissingWinGetBlocksUserAppBeforeAnyChanges(t *testing.T) {
 	c.checkNetwork = func(context.Context) error { t.Fatal("network before WinGet availability"); return nil }
 	c.Run()
 	msg, ok := c.result.(ui.ExecutionErrorMsg)
-	if !ok || !strings.Contains(msg.Err.Error(), "App Installer") || r.calls != 1 { t.Fatalf("result=%+v calls=%d", c.result, r.calls) }
+	if !ok || !strings.Contains(msg.Err.Error(), "App Installer") || r.calls != 1 {
+		t.Fatalf("result=%+v calls=%d", c.result, r.calls)
+	}
 }
 
 func TestCancelledFileOnlyRunStopsBeforeCopy(t *testing.T) {
@@ -117,15 +147,23 @@ func TestCancelledFileOnlyRunStopsBeforeCopy(t *testing.T) {
 	c.ctx = ctx
 	c.selection.Apps = nil
 	source, target := filepath.Join(t.TempDir(), "source"), filepath.Join(t.TempDir(), "target")
-	if err := os.WriteFile(source, []byte("new"), 0600); err != nil { t.Fatal(err) }
-	if err := os.WriteFile(target, []byte("old"), 0600); err != nil { t.Fatal(err) }
+	if err := os.WriteFile(source, []byte("new"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(target, []byte("old"), 0600); err != nil {
+		t.Fatal(err)
+	}
 	c.settings = []catalog.Setting{{ID: "profile", Title: "Profile", Source: source, Target: target}}
 	c.selection.Settings = []ui.Choice{{ID: "setting:profile"}}
 	c.Run()
 	msg, ok := c.result.(ui.ExecutionErrorMsg)
-	if !ok || !errors.Is(msg.Err, context.Canceled) { t.Fatalf("result=%+v", c.result) }
+	if !ok || !errors.Is(msg.Err, context.Canceled) {
+		t.Fatalf("result=%+v", c.result)
+	}
 	data, err := os.ReadFile(target)
-	if err != nil || string(data) != "old" { t.Fatalf("target=%q error=%v", data, err) }
+	if err != nil || string(data) != "old" {
+		t.Fatalf("target=%q error=%v", data, err)
+	}
 }
 
 func TestSettingRequiringAppStillChecksWinGet(t *testing.T) {
@@ -134,10 +172,36 @@ func TestSettingRequiringAppStillChecksWinGet(t *testing.T) {
 	c.client = winget.New(r)
 	c.selection.Apps = nil
 	source, target := filepath.Join(t.TempDir(), "source"), filepath.Join(t.TempDir(), "target")
-	if err := os.WriteFile(source, []byte("profile"), 0600); err != nil { t.Fatal(err) }
+	if err := os.WriteFile(source, []byte("profile"), 0600); err != nil {
+		t.Fatal(err)
+	}
 	c.settings = []catalog.Setting{{ID: "profile", Title: "Profile", Source: source, Target: target, RequiresApp: "wez.wezterm"}}
 	c.selection.Settings = []ui.Choice{{ID: "setting:profile"}}
 	c.Run()
-	if _, ok := c.result.(ui.ExecutionErrorMsg); !ok || r.calls != 1 { t.Fatalf("result=%+v calls=%d", c.result, r.calls) }
-	if _, err := os.Stat(target); !os.IsNotExist(err) { t.Fatalf("target created before prerequisite check: %v", err) }
+	if _, ok := c.result.(ui.ExecutionErrorMsg); !ok || r.calls != 1 {
+		t.Fatalf("result=%+v calls=%d", c.result, r.calls)
+	}
+	if _, err := os.Stat(target); !os.IsNotExist(err) {
+		t.Fatalf("target created before prerequisite check: %v", err)
+	}
+}
+
+func TestStoreOnlyPlanProbesStoreAndStaysInUserProcess(t *testing.T) {
+	c, r := sampleCommand(t)
+	c.apps = []catalog.App{{ID: "9NT1R1C2HH7J", Title: "ChatGPT", Source: "msstore", Scope: "user"}}
+	c.selection.Apps = []ui.Choice{{ID: "9NT1R1C2HH7J"}}
+	c.checkNetwork = func(context.Context) error { t.Fatal("community CDN probed for Store-only plan"); return nil }
+	probes := 0
+	c.checkStoreNetwork = func(context.Context) error { probes++; return nil }
+	c.startAdmin = func(context.Context, []catalog.App) (adminSession, error) {
+		t.Fatal("Store app requested UAC worker")
+		return nil, nil
+	}
+	c.Run()
+	if probes != 1 || len(r.installs) != 1 {
+		t.Fatalf("probes=%d installs=%v result=%+v", probes, r.installs, c.result)
+	}
+	if c.result.(ui.ResultsMsg).Results[0].Status != "succeeded" {
+		t.Fatalf("result=%+v", c.result)
+	}
 }

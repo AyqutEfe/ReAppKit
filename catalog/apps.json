@@ -32,5 +32,129 @@
     "category": "Geliştirme",
     "scope": "auto",
     "requires_admin": true
+  },
+  {
+    "id": "9NKSQGP7F2NH",
+    "title": "WhatsApp",
+    "description": "Mesajlaşma ve görüntülü görüşme.",
+    "category": "İletişim",
+    "scope": "user",
+    "source": "msstore"
+  },
+  {
+    "id": "Brave.Brave",
+    "title": "Brave",
+    "description": "Gizlilik odaklı web tarayıcısı.",
+    "category": "İnternet",
+    "scope": "user",
+    "source": "winget"
+  },
+  {
+    "id": "9NT1R1C2HH7J",
+    "title": "ChatGPT",
+    "description": "OpenAI resmi masaüstü uygulaması.",
+    "category": "Üretkenlik",
+    "scope": "user",
+    "source": "msstore"
+  },
+  {
+    "id": "SublimeHQ.SublimeText.4",
+    "title": "Sublime Text",
+    "description": "Kod ve metin düzenleyicisi; lisans gerekebilir.",
+    "category": "Geliştirme",
+    "scope": "machine",
+    "source": "winget",
+    "requires_admin": true
+  },
+  {
+    "id": "Notion.Notion",
+    "title": "Notion",
+    "description": "Not, belge ve çalışma alanı uygulaması.",
+    "category": "Üretkenlik",
+    "scope": "user",
+    "source": "winget"
+  },
+  {
+    "id": "Spotify.Spotify",
+    "title": "Spotify",
+    "description": "Müzik ve podcast uygulaması.",
+    "category": "Medya",
+    "scope": "user",
+    "source": "winget"
+  },
+  {
+    "id": "MarkText.MarkText",
+    "title": "MarkText",
+    "description": "Markdown düzenleyicisi.",
+    "category": "Üretkenlik",
+    "scope": "user",
+    "source": "winget"
+  },
+  {
+    "id": "RARLab.WinRAR",
+    "title": "WinRAR",
+    "description": "Dosya arşivleme aracı; deneme sürümü.",
+    "category": "Araçlar",
+    "scope": "machine",
+    "source": "winget",
+    "requires_admin": true
+  },
+  {
+    "id": "KDE.Okular",
+    "title": "Okular",
+    "description": "PDF ve belge görüntüleyicisi.",
+    "category": "Üretkenlik",
+    "scope": "user",
+    "source": "winget"
+  },
+  {
+    "id": "DBeaver.DBeaver.Community",
+    "title": "DBeaver Community",
+    "description": "Veritabanı yönetim aracı.",
+    "category": "Geliştirme",
+    "scope": "user",
+    "source": "winget"
+  },
+  {
+    "id": "Microsoft.PowerToys",
+    "title": "PowerToys",
+    "description": "Windows için üretkenlik araçları.",
+    "category": "Araçlar",
+    "scope": "user",
+    "source": "winget"
+  },
+  {
+    "id": "Espanso.Espanso",
+    "title": "Espanso",
+    "description": "Metin kısayollarını genişletme aracı.",
+    "category": "Araçlar",
+    "scope": "user",
+    "source": "winget"
+  },
+  {
+    "id": "TheDocumentFoundation.LibreOffice",
+    "title": "LibreOffice",
+    "description": "Ofis belgeleri, tablolar ve sunumlar.",
+    "category": "Üretkenlik",
+    "scope": "machine",
+    "source": "winget",
+    "requires_admin": true
+  },
+  {
+    "id": "Mozilla.Thunderbird",
+    "title": "Thunderbird",
+    "description": "E-posta ve takvim uygulaması.",
+    "category": "İletişim",
+    "scope": "machine",
+    "source": "winget",
+    "requires_admin": true
+  },
+  {
+    "id": "CharlesMilette.TranslucentTB",
+    "title": "TranslucentTB",
+    "description": "Görev çubuğu görünümünü özelleştirme.",
+    "category": "Araçlar",
+    "scope": "user",
+    "source": "winget"
   }
 ]

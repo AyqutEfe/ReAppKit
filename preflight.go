@@ -13,6 +13,11 @@ import (
 // This only tests HTTPS connectivity to the default WinGet CDN. Vendor
 // downloads and source agreements are still checked by WinGet itself.
 const wingetConnectivityURL = "https://cdn.winget.microsoft.com/"
+const storeConnectivityURL = "https://storeedgefd.dsx.mp.microsoft.com/"
+
+func checkStoreConnection(ctx context.Context) error {
+	return probeConnection(ctx, &http.Client{Timeout: 10 * time.Second}, storeConnectivityURL)
+}
 
 func checkWinGetConnection(ctx context.Context) error {
 	return probeConnection(ctx, &http.Client{Timeout: 10 * time.Second}, wingetConnectivityURL)
@@ -61,11 +66,12 @@ func (c *executionCommand) preflight() ([]catalog.App, error) {
 	}
 	fmt.Fprintln(c.stdout, "[ok] Windows ve WinGet erişimi")
 	var pending []catalog.App
-	missing := false
+	missingSources := make(map[string]bool)
 	for _, choice := range c.selection.Apps {
 		app := byID[choice.ID]
 		ctx, cancel := context.WithTimeout(c.ctx, 30*time.Second)
-		installed, err := c.client.Installed(ctx, app.ID)
+		appClient := c.client.WithSource(app.Source)
+		installed, err := appClient.Installed(ctx, app.ID)
 		cancel()
 		if err != nil {
 			return nil, fmt.Errorf("uygulama ön kontrolü %s: %w", app.Title, err)
@@ -74,23 +80,40 @@ func (c *executionCommand) preflight() ([]catalog.App, error) {
 			fmt.Fprintf(c.stdout, "[skipped] %s zaten kurulu\n", app.Title)
 			continue
 		}
-		missing = true
+		source := app.Source
+		if source == "" {
+			source = "winget"
+		}
+		missingSources[source] = true
 		if app.RequiresAdmin {
 			pending = append(pending, app)
 		}
 	}
-	if missing {
-		check := c.checkNetwork
-		if check == nil {
-			check = checkWinGetConnection
+	if len(missingSources) > 0 {
+		for _, source := range []string{"winget", "msstore"} {
+			if !missingSources[source] {
+				continue
+			}
+			check := c.checkNetwork
+			label := "WinGet CDN"
+			if source == "msstore" {
+				check = c.checkStoreNetwork
+				label = "Microsoft Store"
+				if check == nil {
+					check = checkStoreConnection
+				}
+			}
+			if check == nil {
+				check = checkWinGetConnection
+			}
+			ctx, cancel := context.WithTimeout(c.ctx, 10*time.Second)
+			err := check(ctx)
+			cancel()
+			if err != nil {
+				return nil, err
+			}
+			fmt.Fprintf(c.stdout, "[ok] %s HTTPS bağlantısı (kurucu indirmeleri ayrıca kontrol edilir)\n", label)
 		}
-		ctx, cancel := context.WithTimeout(c.ctx, 10*time.Second)
-		err := check(ctx)
-		cancel()
-		if err != nil {
-			return nil, err
-		}
-		fmt.Fprintln(c.stdout, "[ok] WinGet CDN HTTPS bağlantısı (kurucu indirmeleri ayrıca kontrol edilir)")
 	} else {
 		fmt.Fprintln(c.stdout, "[skipped] Ağ: kurulum gerektiren uygulama yok.")
 	}

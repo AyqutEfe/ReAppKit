@@ -89,3 +89,28 @@ func TestGitUsesMachineScopeInElevatedWorker(t *testing.T) {
 	}
 	t.Fatal("Git missing")
 }
+
+func TestStoreCatalogMustStayInUserProcess(t *testing.T) {
+	for _, content := range []string{
+		`[{"id":"9NT1R1C2HH7J","title":"ChatGPT","source":"msstore","scope":"machine"}]`,
+		`[{"id":"9NT1R1C2HH7J","title":"ChatGPT","source":"msstore","scope":"auto"}]`,
+		`[{"id":"9NT1R1C2HH7J","title":"ChatGPT","source":"msstore","requires_admin":true}]`,
+		`[{"id":"9NT1R1C2HH7J","title":"ChatGPT","source":"unknown"}]`,
+	} {
+		path := filepath.Join(t.TempDir(), "apps.json")
+		if err := os.WriteFile(path, []byte(content), 0600); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := LoadApps(path); err == nil {
+			t.Fatalf("unsafe Store catalog accepted: %s", content)
+		}
+	}
+	path := filepath.Join(t.TempDir(), "apps.json")
+	if err := os.WriteFile(path, []byte(`[{"id":"9NT1R1C2HH7J","title":"ChatGPT","source":"msstore"},{"id":"Git.Git","title":"Git"}]`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	apps, err := LoadApps(path)
+	if err != nil || apps[0].Source != "msstore" || apps[0].Scope != "user" || apps[0].RequiresAdmin || apps[1].Source != "winget" {
+		t.Fatalf("apps=%+v err=%v", apps, err)
+	}
+}

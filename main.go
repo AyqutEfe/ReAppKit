@@ -53,6 +53,9 @@ func main() {
 
 	appChoices := make([]ui.Choice, 0, len(apps))
 	for _, app := range apps {
+		if app.Source == "msstore" {
+			app.Title += " [Microsoft Store]"
+		}
 		appChoices = append(appChoices, ui.Choice{
 			ID:            app.ID,
 			Title:         app.Title,
@@ -146,7 +149,7 @@ func selectedJobs(selection ui.Selection, apps []catalog.App, settingsList []cat
 			return nil, fmt.Errorf("duplicate selected app %q", app.ID)
 		}
 		selectedApps[app.ID] = true
-		job := client.Job(app.ID, app.Title, app.Scope)
+		job := client.WithSource(app.Source).Job(app.ID, app.Title, app.Scope)
 		if app.RequiresAdmin {
 			job.Apply = func(ctx context.Context) error {
 				if err := ctx.Err(); err != nil {
@@ -176,8 +179,9 @@ func selectedJobs(selection ui.Selection, apps []catalog.App, settingsList []cat
 		if setting.RequiresApp != "" && !selectedApps[setting.RequiresApp] {
 			check := job.Check
 			requiredID := setting.RequiresApp
+			requiredClient := client.WithSource(appByID[requiredID].Source)
 			job.Check = func(ctx context.Context) (bool, error) {
-				installed, err := client.Installed(ctx, requiredID)
+				installed, err := requiredClient.Installed(ctx, requiredID)
 				if err != nil {
 					return false, err
 				}
