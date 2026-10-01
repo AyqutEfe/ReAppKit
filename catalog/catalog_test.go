@@ -90,6 +90,22 @@ func TestGitUsesMachineScopeInElevatedWorker(t *testing.T) {
 	t.Fatal("Git missing")
 }
 
+func TestOkularUsesKDERecommendedStoreDistribution(t *testing.T) {
+	apps, err := LoadApps("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, app := range apps {
+		if app.Title == "Okular" {
+			if app.ID != "9N41MSQ1WNM8" || app.Source != "msstore" || app.Scope != "user" || app.RequiresAdmin {
+				t.Fatalf("Okular=%+v", app)
+			}
+			return
+		}
+	}
+	t.Fatal("Okular missing")
+}
+
 func TestStoreCatalogMustStayInUserProcess(t *testing.T) {
 	for _, content := range []string{
 		`[{"id":"9NT1R1C2HH7J","title":"ChatGPT","source":"msstore","scope":"machine"}]`,

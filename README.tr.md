@@ -55,7 +55,7 @@ Uygulamalar sırayla kurulur, ardından dosya ayarları uygulanır. Yönetici iz
 | Medya | Spotify |
 | Araçlar | WinRAR, PowerToys, Espanso, TranslucentTB |
 
-WhatsApp ve ChatGPT Microsoft Store, diğer uygulamalar topluluk WinGet kaynağını kullanır. Paket kimlikleri, kurulum kapsamları ve kaynak bağlantıları için [katalog referansına](catalog/README.md) bak.
+WhatsApp, ChatGPT ve Okular Microsoft Store, diğer uygulamalar topluluk WinGet kaynağını kullanır. Paket kimlikleri, kurulum kapsamları ve kaynak bağlantıları için [katalog referansına](catalog/README.md) bak.
 
 ## Kişisel yapılandırma dosyaları
 
@@ -108,6 +108,6 @@ Sonuç raporları varsayılan olarak `%LOCALAPPDATA%\ReAppKit\runs` konumuna yaz
 
 ## Mevcut sınırlamalar
 
-Kaynak ve paket koşulları otomatik kabul edilmez. Bir kaynağın koşulları henüz incelenmediyse ReAppKit, yeniden denemeden önce çalıştırılacak PowerShell komutunu gösterir. Bazı kurucular ek etkileşim isteyebilir; bağlantı kontrolü her indirmenin başarılı olacağını garanti etmez.
+Kaynak ve paket koşulları otomatik kabul edilmez. Ön kontrolde kaynak koşulları eksikse ReAppKit, yeniden denemeden önce çalıştırılacak PowerShell komutunu gösterir. Kurulum sırasında paket koşulları için WinGet aynı terminalde açık onayınızı ister; reddederseniz o uygulama kurulmaz. Bazı kurucular ek etkileşim isteyebilir; bağlantı kontrolü her indirmenin başarılı olacağını garanti etmez.
 
 Uygulama hesabına giriş, ücretli lisanslar ve kişisel uygulama ayarları kurulumdan ayrı tamamlanır. Hazır Windows görünüm ve ses ayarları, tekrar kullanılabilir profiller ve yeniden başlatma sonrası devam henüz sunulmaz.

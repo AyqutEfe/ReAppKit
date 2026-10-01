@@ -2,14 +2,17 @@
 package winget
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os/exec"
 	"regexp"
 	"runtime"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/AyqutEfe/ReAppKit/internal/core"
 )
@@ -22,11 +25,27 @@ type Runner interface {
 type Client struct {
 	runner Runner
 	source string
+	input  io.Reader
+	output io.Writer
 }
 
 // WithSource leaves the original client unchanged so mixed plans remain isolated.
 func (c *Client) WithSource(source string) *Client {
-	return &Client{runner: c.runner, source: source}
+	clone := *c
+	clone.source = source
+	return &clone
+}
+
+// WithInteraction connects WinGet's own agreement prompt to the released
+// terminal. No agreement is accepted by ReAppKit on the user's behalf.
+func (c *Client) WithInteraction(input io.Reader, output io.Writer) *Client {
+	clone := *c
+	clone.input, clone.output = input, output
+	return &clone
+}
+
+type interactiveRunner interface {
+	RunInteractive(context.Context, io.Reader, io.Writer, ...string) ([]byte, error)
 }
 
 func (c *Client) sourceName() string {
@@ -52,7 +71,7 @@ func New(runner Runner) *Client {
 
 type osRunner struct{}
 
-func (osRunner) Run(ctx context.Context, args ...string) ([]byte, error) {
+func wingetCommand(ctx context.Context, args ...string) (*exec.Cmd, error) {
 	if runtime.GOOS != "windows" {
 		return nil, errors.New("WinGet is supported only on Windows")
 	}
@@ -67,7 +86,27 @@ func (osRunner) Run(ctx context.Context, args ...string) ([]byte, error) {
 	if err != nil || build < 22000 {
 		return nil, errors.New("ReAppKit requires Windows 11 build 22000 or later")
 	}
-	return exec.CommandContext(ctx, "winget", args...).CombinedOutput()
+	return exec.CommandContext(ctx, "winget", args...), nil
+}
+
+func (osRunner) Run(ctx context.Context, args ...string) ([]byte, error) {
+	command, err := wingetCommand(ctx, args...)
+	if err != nil {
+		return nil, err
+	}
+	return command.CombinedOutput()
+}
+
+func (osRunner) RunInteractive(ctx context.Context, input io.Reader, output io.Writer, args ...string) ([]byte, error) {
+	command, err := wingetCommand(ctx, args...)
+	if err != nil {
+		return nil, err
+	}
+	var captured bytes.Buffer
+	stream := io.MultiWriter(output, &captured)
+	command.Stdin, command.Stdout, command.Stderr = input, stream, stream
+	err = command.Run()
+	return captured.Bytes(), err
 }
 
 func (c *Client) Available(ctx context.Context) error {
@@ -117,7 +156,20 @@ func (c *Client) Installed(ctx context.Context, id string) (bool, error) {
 	// Restrict lookup to the same catalog used for installation. Without a
 	// source, WinGet also opens msstore, whose first-use agreement can fail a
 	// non-interactive check before it can report installed applications.
-	output, err := c.runner.Run(ctx, "list", "--id", id, "--exact", "--source", c.sourceName(), "--disable-interactivity")
+	args := []string{"list", "--id", id, "--exact", "--source", c.sourceName(), "--disable-interactivity"}
+	output, err := c.runner.Run(ctx, args...)
+	// A transient WinGet cache failure must not cause an already-installed
+	// package to be installed again. Retry only this read-only query once.
+	if hasExitCode(err, 0x80071130) {
+		timer := time.NewTimer(500 * time.Millisecond)
+		defer timer.Stop()
+		select {
+		case <-ctx.Done():
+			return false, ctx.Err()
+		case <-timer.C:
+			output, err = c.runner.Run(ctx, args...)
+		}
+	}
 	if err != nil {
 		var exitErr interface{ ExitCode() int }
 		if errors.As(err, &exitErr) && uint32(exitErr.ExitCode()) == 0x8A150014 {
@@ -125,6 +177,9 @@ func (c *Client) Installed(ctx context.Context, id string) (bool, error) {
 		}
 		if sourceAgreementRequired(err) {
 			return false, sourceAgreementError(id, c.sourceName())
+		}
+		if hasExitCode(err, 0x80071130) {
+			return false, fmt.Errorf("%s kurulum durumu doğrulanamadı: WinGet kaynak önbelleği açılamadı (0x80071130). PowerShell'de `winget source update --name %s` çalıştırıp yeniden deneyin; uygulama kurulu olabilir: %w", id, c.sourceName(), err)
 		}
 		return false, fmt.Errorf("WinGet list %s: %w: %s", id, err, strings.TrimSpace(string(output)))
 	}
@@ -172,12 +227,25 @@ func (c *Client) Install(ctx context.Context, id string, scopes ...string) error
 	}
 	args = append(args, "--silent", "--disable-interactivity")
 	output, err := c.runner.Run(ctx, args...)
+	if (packageAgreementRequired(err) || sourceAgreementRequired(err)) && c.input != nil && c.output != nil {
+		if runner, ok := c.runner.(interactiveRunner); ok {
+			fmt.Fprintf(c.output, "\n%s: WinGet koşulları gösterecek. İnceleyip kabul ediyorsanız istemi onaylayın; reddederseniz bu uygulama kurulmaz.\n", id)
+			// Keep the installer silent, but allow WinGet's agreement prompt.
+			output, err = runner.RunInteractive(ctx, c.input, c.output, args[:len(args)-1]...)
+		}
+	}
 	if err != nil {
 		if installerCancelled(err, output) {
 			return fmt.Errorf("%s kurulumu iptal edildi veya Windows izin isteği tamamlanamadı; yeniden denemede UAC penceresini kontrol edip onaylayın: %w: %s", id, err, strings.TrimSpace(string(output)))
 		}
 		if sourceAgreementRequired(err) {
 			return sourceAgreementError(id, c.sourceName())
+		}
+		if packageAgreementRequired(err) {
+			return fmt.Errorf("%s paket koşulları onaylanmadı; bu uygulama kurulmadı (0x8a150041). PowerShell'de `winget install --id %s --exact --source %s` ile koşulları inceleyebilirsiniz: %w", id, id, c.sourceName(), err)
+		}
+		if hasExitCode(err, 0x80190194) {
+			return fmt.Errorf("%s kurucu indirme adresi HTTP 404 döndürdü; paket kaynağındaki bağlantı mevcut değil. `winget source update --name %s` sonrası yeniden deneyin; sürerse yayıncının resmi dağıtımını kontrol edin: %w: %s", id, c.sourceName(), err, strings.TrimSpace(string(output)))
 		}
 		if noApplicableInstaller(err) && scope == "auto" {
 			return fmt.Errorf("WinGet has no applicable installer for %s without a scope filter; check architecture, Windows version and WinGet logs: %w: %s", id, err, strings.TrimSpace(string(output)))
@@ -196,8 +264,16 @@ func noApplicableInstaller(err error) bool {
 }
 
 func sourceAgreementRequired(err error) bool {
+	return hasExitCode(err, 0x8A150046)
+}
+
+func packageAgreementRequired(err error) bool {
+	return hasExitCode(err, 0x8A150041)
+}
+
+func hasExitCode(err error, code uint32) bool {
 	var exitErr interface{ ExitCode() int }
-	return errors.As(err, &exitErr) && uint32(exitErr.ExitCode()) == 0x8A150046
+	return errors.As(err, &exitErr) && uint32(exitErr.ExitCode()) == code
 }
 
 func sourceAgreementError(id, source string) error {
@@ -211,7 +287,7 @@ func installerCancelled(err error, output []byte) bool {
 		return false
 	}
 	code := uint32(exitErr.ExitCode())
-	if code == 0x8A150011 || code == 0x800704C7 {
+	if code == 0x800704C7 {
 		return true
 	}
 	text := strings.ToLower(string(output))

@@ -55,7 +55,7 @@ Applications run in sequence, followed by file settings. Applications that do no
 | Media | Spotify |
 | Utilities | WinRAR, PowerToys, Espanso, TranslucentTB |
 
-WhatsApp and ChatGPT use Microsoft Store; the other entries use the community WinGet source. See the [catalog reference](catalog/README.md) for package identifiers, installation scopes and source references.
+WhatsApp, ChatGPT and Okular use Microsoft Store; the other entries use the community WinGet source. See the [catalog reference](catalog/README.md) for package identifiers, installation scopes and source references.
 
 ## Personal configuration files
 
@@ -108,6 +108,6 @@ Result reports default to `%LOCALAPPDATA%\ReAppKit\runs`.
 
 ## Current limitations
 
-Source and package agreements are not automatically accepted. If a source needs agreement review, ReAppKit shows the PowerShell command to run before retrying. Some installers can require additional interaction, and a connectivity check does not guarantee every download will succeed.
+Source and package agreements are not automatically accepted. If a source needs agreement review during preflight, ReAppKit shows the PowerShell command to run before retrying. During installation, pending package agreements are shown by WinGet in the same terminal for your explicit response; declining leaves that application uninstalled. Some installers can require additional interaction, and a connectivity check does not guarantee every download will succeed.
 
 Application sign-in, paid licenses and personal app setup remain separate from installation. Built-in Windows appearance and sound settings, reusable profiles and continuation after a restart are not available yet.

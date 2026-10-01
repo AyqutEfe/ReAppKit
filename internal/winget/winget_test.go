@@ -3,10 +3,100 @@ package winget
 import (
 	"context"
 	"errors"
+	"io"
 	"reflect"
 	"strings"
 	"testing"
 )
+
+type promptRunner struct {
+	fakeRunner
+	prompts   [][]string
+	answer    string
+	promptErr error
+}
+
+func (r *promptRunner) RunInteractive(_ context.Context, input io.Reader, output io.Writer, args ...string) ([]byte, error) {
+	r.prompts = append(r.prompts, append([]string(nil), args...))
+	answer, _ := io.ReadAll(input)
+	r.answer = string(answer)
+	fmtOutput := []byte("Package agreement: [Y] Yes [N] No\n")
+	output.Write(fmtOutput)
+	return fmtOutput, r.promptErr
+}
+
+func TestPackageAgreementPromptUsesOriginalTerminalAndNoAutomaticAcceptance(t *testing.T) {
+	for _, reject := range []bool{false, true} {
+		r := &promptRunner{fakeRunner: fakeRunner{err: codeError(-1978335167)}} // 0x8a150041
+		answer := "y\n"
+		if reject {
+			answer = "n\n"
+			r.promptErr = codeError(-1978335167)
+		}
+		var output strings.Builder
+		base := New(r).WithInteraction(strings.NewReader(answer), &output)
+		err := base.WithSource("msstore").Install(context.Background(), "9NKSQGP7F2NH")
+		if (err != nil) != reject || r.answer != answer || len(r.prompts) != 1 {
+			t.Fatalf("reject=%v answer=%q prompts=%v err=%v", reject, r.answer, r.prompts, err)
+		}
+		want := []string{"install", "--id", "9NKSQGP7F2NH", "--exact", "--source", "msstore", "--silent"}
+		if !reflect.DeepEqual(r.prompts[0], want) || len(r.calls) != 2 {
+			t.Fatalf("interactive=%v silent calls=%v", r.prompts, r.calls)
+		}
+		if !strings.Contains(output.String(), "Package agreement") || base.sourceName() != "winget" {
+			t.Fatalf("output=%s source=%s", output.String(), base.sourceName())
+		}
+		if reject && (!strings.Contains(err.Error(), "winget install --id 9NKSQGP7F2NH --exact --source msstore") || strings.Contains(err.Error(), "UAC")) {
+			t.Fatalf("refusal guidance=%v", err)
+		}
+	}
+}
+
+func TestPackageAgreementWithoutTerminalGivesExactGuidance(t *testing.T) {
+	r := &promptRunner{fakeRunner: fakeRunner{err: codeError(-1978335167)}}
+	err := New(r).WithSource("msstore").Install(context.Background(), "9NT1R1C2HH7J")
+	if err == nil || !strings.Contains(err.Error(), "winget install --id 9NT1R1C2HH7J --exact --source msstore") || len(r.prompts) != 0 {
+		t.Fatalf("error=%v prompts=%v", err, r.prompts)
+	}
+}
+
+type cacheRunner struct {
+	fakeRunner
+	queries    int
+	persistent bool
+}
+
+func (r *cacheRunner) Run(ctx context.Context, args ...string) ([]byte, error) {
+	if args[0] == "list" {
+		r.queries++
+		if r.queries == 1 || r.persistent {
+			return nil, codeError(-int64(0x100000000 - 0x80071130))
+		}
+	}
+	return r.fakeRunner.Run(ctx, args...)
+}
+
+func TestTransientCacheFailureRetriesReadOnlyQueryOnce(t *testing.T) {
+	for _, persistent := range []bool{false, true} {
+		r := &cacheRunner{fakeRunner: fakeRunner{output: []byte("MarkText MarkText.MarkText 0.19.1 winget\n")}, persistent: persistent}
+		installed, err := New(r).Installed(context.Background(), "MarkText.MarkText")
+		if r.queries != 2 || installed == persistent || (err != nil) != persistent {
+			t.Fatalf("persistent=%v installed=%v queries=%d err=%v", persistent, installed, r.queries, err)
+		}
+		if persistent && !strings.Contains(err.Error(), "winget source update --name winget") {
+			t.Fatalf("cache guidance=%v", err)
+		}
+	}
+}
+
+func TestHashMismatchIsNotUACCancellationAndDoesNotRetry(t *testing.T) {
+	r := &promptRunner{fakeRunner: fakeRunner{err: codeError(-int64(0x100000000 - 0x8A150011)), output: []byte("Installer hash does not match")}}
+	var output strings.Builder
+	err := New(r).WithInteraction(strings.NewReader("y\n"), &output).Install(context.Background(), "Test.App")
+	if err == nil || strings.Contains(err.Error(), "UAC") || len(r.calls) != 2 || len(r.prompts) != 0 {
+		t.Fatalf("error=%v calls=%v prompts=%v", err, r.calls, r.prompts)
+	}
+}
 
 type fakeRunner struct {
 	calls  [][]string

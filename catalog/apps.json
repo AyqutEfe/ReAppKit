@@ -100,12 +100,12 @@
     "requires_admin": true
   },
   {
-    "id": "KDE.Okular",
+    "id": "9N41MSQ1WNM8",
     "title": "Okular",
     "description": "PDF ve belge görüntüleyicisi.",
     "category": "Üretkenlik",
     "scope": "user",
-    "source": "winget"
+    "source": "msstore"
   },
   {
     "id": "DBeaver.DBeaver.Community",

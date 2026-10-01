@@ -11,8 +11,55 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 )
+
+type packageConsentError struct{}
+
+func (packageConsentError) Error() string { return "package agreement pending" }
+func (packageConsentError) ExitCode() int { return -1978335167 }
+
+type terminalConsentRunner struct {
+	consentRunner
+	prompts int
+}
+
+func (r *terminalConsentRunner) Run(ctx context.Context, args ...string) ([]byte, error) {
+	if args[0] == "install" {
+		return nil, packageConsentError{}
+	}
+	return r.consentRunner.Run(ctx, args...)
+}
+
+func (r *terminalConsentRunner) RunInteractive(ctx context.Context, input io.Reader, output io.Writer, args ...string) ([]byte, error) {
+	r.prompts++
+	answer, _ := io.ReadAll(input)
+	if string(answer) != "y\n" {
+		return nil, packageConsentError{}
+	}
+	fmt.Fprintln(output, "WinGet agreement prompt")
+	return r.consentRunner.Run(ctx, args...)
+}
+
+func TestExecutionHandsReleasedTerminalToStoreAgreementPrompt(t *testing.T) {
+	r := &terminalConsentRunner{consentRunner: consentRunner{installed: map[string]bool{}}}
+	var output strings.Builder
+	c := &executionCommand{ctx: context.Background(), apps: []catalog.App{{ID: "9NKSQGP7F2NH", Title: "WhatsApp", Source: "msstore", Scope: "user"}}, client: winget.New(r), resultsDir: t.TempDir(), selection: ui.Selection{Apps: []ui.Choice{{ID: "9NKSQGP7F2NH"}}}, checkStoreNetwork: func(context.Context) error { return nil }}
+	c.SetStdin(strings.NewReader("y\n"))
+	c.SetStdout(&output)
+	c.startAdmin = func(context.Context, []catalog.App) (adminSession, error) {
+		t.Fatal("Store app requested admin session")
+		return nil, nil
+	}
+	if err := c.Run(); err != nil {
+		t.Fatal(err)
+	}
+	rows := c.result.(ui.ResultsMsg).Results
+	if len(rows) != 1 || rows[0].Status != "succeeded" || r.prompts != 1 || !strings.Contains(output.String(), "WinGet agreement prompt") {
+		t.Fatalf("results=%+v prompts=%d output=%s", rows, r.prompts, output.String())
+	}
+}
 
 type consentRunner struct {
 	installed map[string]bool

@@ -23,6 +23,16 @@ func TestSpecificStoreAgreementGuidanceDoesNotSuggestChrome(t *testing.T) {
 	}
 }
 
+func TestPackageAgreementDoesNotSuggestSourceAgreementCommand(t *testing.T) {
+	m := NewModel(nil, nil, func(Selection) tea.Cmd { return nil })
+	m.screen = resultsScreen
+	m.results = []Result{{Title: "WhatsApp", Status: "failed", Message: "Paket koşulları onaylanmadı (0x8a150041): winget install --id 9NKSQGP7F2NH --exact --source msstore"}}
+	view := m.content()
+	if !strings.Contains(view, "9NKSQGP7F2NH") || strings.Contains(view, "Google.Chrome") || strings.Contains(view, "winget list") {
+		t.Fatalf("misleading package guidance: %s", view)
+	}
+}
+
 func TestLargeCatalogPagesKeyboardWheelAndMouseKeepCorrectIDs(t *testing.T) {
 	var apps []Choice
 	for i := 0; i < 20; i++ {

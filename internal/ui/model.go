@@ -590,7 +590,7 @@ func (m Model) writeResults(b *strings.Builder) {
 				fmt.Fprintf(b, "      %s\n", line)
 			}
 			lower := strings.ToLower(r.Message)
-			if !strings.Contains(lower, "winget list --id") && strings.Contains(lower, "msstore") && (strings.Contains(lower, "8a150046") || strings.Contains(lower, "agreement") || strings.Contains(lower, "view the following")) {
+			if !strings.Contains(lower, "winget list --id") && !strings.Contains(lower, "winget install --id") && strings.Contains(lower, "msstore") && strings.Contains(lower, "8a150046") {
 				showSourceHint = true
 			}
 		}

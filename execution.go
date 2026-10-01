@@ -24,6 +24,7 @@ type executionCommand struct {
 	client            *winget.Client
 	resultsDir        string
 	stdout            io.Writer
+	stdin             io.Reader
 	result            tea.Msg
 	startAdmin        func(context.Context, []catalog.App) (adminSession, error)
 	checkNetwork      func(context.Context) error
@@ -32,7 +33,7 @@ type executionCommand struct {
 
 var _ tea.ExecCommand = (*executionCommand)(nil)
 
-func (c *executionCommand) SetStdin(io.Reader)    {}
+func (c *executionCommand) SetStdin(r io.Reader)  { c.stdin = r }
 func (c *executionCommand) SetStdout(w io.Writer) { c.stdout = w }
 func (c *executionCommand) SetStderr(io.Writer)   {}
 
@@ -40,6 +41,7 @@ func (c *executionCommand) Run() error {
 	if c.stdout == nil {
 		c.stdout = io.Discard
 	}
+	c.client = c.client.WithInteraction(c.stdin, c.stdout)
 	// Validate all jobs before UAC or changes.
 	if _, err := selectedJobs(c.selection, c.apps, c.settings, c.client); err != nil {
 		c.result = ui.ExecutionErrorMsg{Err: err}
