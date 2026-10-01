@@ -104,6 +104,81 @@ type fakeRunner struct {
 	err    error
 }
 
+type sourcePromptRunner struct {
+	fakeRunner
+	accepted       bool
+	refuse         bool
+	persistent     bool
+	prompts        int
+	promptArgs     []string
+	promptDeadline bool
+	queryDeadlines []bool
+}
+
+func (r *sourcePromptRunner) Run(ctx context.Context, args ...string) ([]byte, error) {
+	if args[0] == "list" {
+		_, deadline := ctx.Deadline()
+		r.queryDeadlines = append(r.queryDeadlines, deadline)
+		if !r.accepted {
+			return nil, codeError(-1978335162)
+		}
+	}
+	return r.fakeRunner.Run(ctx, args...)
+}
+
+func (r *sourcePromptRunner) RunInteractive(ctx context.Context, input io.Reader, output io.Writer, args ...string) ([]byte, error) {
+	r.prompts++
+	r.promptArgs = append([]string(nil), args...)
+	_, r.promptDeadline = ctx.Deadline()
+	output.Write([]byte("Source terms: [Y] Yes [N] No\n"))
+	if r.refuse {
+		return nil, codeError(-1978335162)
+	}
+	if !r.persistent {
+		r.accepted = true
+	}
+	return nil, codeError(-1978335212) // No installed package after acceptance.
+}
+
+func TestSourceReviewSeparatesUserPromptFromQueryDeadlineAndRechecks(t *testing.T) {
+	for _, installed := range []bool{false, true} {
+		r := &sourcePromptRunner{}
+		if installed {
+			r.output = []byte("WhatsApp 9NKSQGP7F2NH 1 msstore\n")
+		}
+		var output strings.Builder
+		client := New(r).WithInteraction(strings.NewReader("y\n"), &output).WithSource("msstore")
+		done, err := client.InstalledWithReview(context.Background(), "9NKSQGP7F2NH")
+		want := []string{"list", "--id", "9NKSQGP7F2NH", "--exact", "--source", "msstore"}
+		if err != nil || done != installed || r.prompts != 1 || !reflect.DeepEqual(r.promptArgs, want) || r.promptDeadline || !reflect.DeepEqual(r.queryDeadlines, []bool{true, true}) {
+			t.Fatalf("installed=%v done=%v error=%v runner=%+v", installed, done, err, r)
+		}
+		if !strings.Contains(output.String(), "Source terms") {
+			t.Fatalf("terms not shown: %s", output.String())
+		}
+	}
+}
+
+func TestSourceReviewRefusalOrUnpersistedAcceptanceNeverLoops(t *testing.T) {
+	for _, persistent := range []bool{false, true} {
+		r := &sourcePromptRunner{refuse: !persistent, persistent: persistent}
+		var output strings.Builder
+		client := New(r).WithInteraction(strings.NewReader("n\n"), &output).WithSource("msstore")
+		done, err := client.InstalledWithReview(context.Background(), "9NKSQGP7F2NH")
+		if done || err == nil || r.prompts != 1 || !strings.Contains(err.Error(), "winget list --id 9NKSQGP7F2NH --exact --source msstore") {
+			t.Fatalf("done=%v error=%v prompts=%d", done, err, r.prompts)
+		}
+	}
+}
+
+func TestSourceReviewWithoutTerminalKeepsManualGuidance(t *testing.T) {
+	r := &sourcePromptRunner{}
+	done, err := New(r).WithSource("msstore").InstalledWithReview(context.Background(), "9NKSQGP7F2NH")
+	if done || err == nil || r.prompts != 0 || !strings.Contains(err.Error(), "winget list --id 9NKSQGP7F2NH --exact --source msstore") {
+		t.Fatalf("done=%v error=%v prompts=%d", done, err, r.prompts)
+	}
+}
+
 func TestMicrosoftStoreSourceIsolationAndNoScopeOrAutomaticAgreements(t *testing.T) {
 	f := &fakeRunner{output: []byte("ChatGPT 9NT1R1C2HH7J 1 msstore\n")}
 	base := New(f)
@@ -200,7 +275,7 @@ func TestSourceAgreementRequiresUserReview(t *testing.T) {
 	if installed || err == nil || !strings.Contains(err.Error(), "winget list --id Git.Git --exact --source winget") {
 		t.Fatalf("installed=%v error=%v", installed, err)
 	}
-	if err := c.Install(context.Background(), "Git.Git"); err == nil || !strings.Contains(err.Error(), "review and accept") {
+	if err := c.Install(context.Background(), "Git.Git"); err == nil || !strings.Contains(err.Error(), "winget list --id Git.Git --exact --source winget") {
 		t.Fatalf("install error=%v", err)
 	}
 	want := []string{"install", "--id", "Git.Git", "--exact", "--source", "winget", "--scope", "user", "--silent", "--disable-interactivity"}

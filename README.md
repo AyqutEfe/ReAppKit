@@ -108,6 +108,6 @@ Result reports default to `%LOCALAPPDATA%\ReAppKit\runs`.
 
 ## Current limitations
 
-Source and package agreements are not automatically accepted. If a source needs agreement review during preflight, ReAppKit shows the PowerShell command to run before retrying. During installation, pending package agreements are shown by WinGet in the same terminal for your explicit response; declining leaves that application uninstalled. Some installers can require additional interaction, and a connectivity check does not guarantee every download will succeed.
+Source and package agreements are not automatically accepted. If a source needs agreement review during preflight, WinGet displays its terms in the same terminal before installation or the initial UAC request. Declining stops the run before application installations and file changes. When no interactive terminal is available, ReAppKit shows the exact PowerShell command to review the terms. During installation, pending package agreements are shown by WinGet in the same terminal for your explicit response; declining leaves that application uninstalled. Some installers can require additional interaction, and a connectivity check does not guarantee every download will succeed.
 
 Application sign-in, paid licenses and personal app setup remain separate from installation. Built-in Windows appearance and sound settings, reusable profiles and continuation after a restart are not available yet.

@@ -143,6 +143,39 @@ func validateID(id string) error {
 	return nil
 }
 
+// InstalledWithReview keeps bounded read-only checks separate from the time
+// the user needs to review source terms. A refusal never starts installation.
+func (c *Client) InstalledWithReview(ctx context.Context, id string) (bool, error) {
+	check := func() (bool, error) {
+		queryCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+		defer cancel()
+		return c.Installed(queryCtx, id)
+	}
+	installed, err := check()
+	var agreement *sourceReviewError
+	if !errors.As(err, &agreement) || c.input == nil || c.output == nil {
+		return installed, err
+	}
+	runner, ok := c.runner.(interactiveRunner)
+	if !ok {
+		return installed, err
+	}
+	if err := ctx.Err(); err != nil {
+		return false, err
+	}
+	fmt.Fprintf(c.output, "\n%s kaynağının koşulları için WinGet onayı gerekiyor. Koşulları inceleyip kabul ediyorsanız istemi onaylayın; reddederseniz kurulum başlamaz.\n", c.sourceName())
+	output, err := runner.RunInteractive(ctx, c.input, c.output, "list", "--id", id, "--exact", "--source", c.sourceName())
+	// A missing package is expected on a clean PC. This query accepts only
+	// source terms and cannot install a package.
+	if err != nil && !hasExitCode(err, 0x8A150014) {
+		if sourceAgreementRequired(err) {
+			return false, sourceAgreementError(id, c.sourceName())
+		}
+		return false, fmt.Errorf("%s kaynak koşulları incelemesi tamamlanamadı: %w: %s", c.sourceName(), err, strings.TrimSpace(string(output)))
+	}
+	return check()
+}
+
 func (c *Client) Installed(ctx context.Context, id string) (bool, error) {
 	if err := c.validateSource(); err != nil {
 		return false, err
@@ -276,8 +309,14 @@ func hasExitCode(err error, code uint32) bool {
 	return errors.As(err, &exitErr) && uint32(exitErr.ExitCode()) == code
 }
 
+type sourceReviewError struct{ id, source string }
+
+func (e *sourceReviewError) Error() string {
+	return fmt.Sprintf("%s kaynak koşulları onaylanmadı. PowerShell'de `winget list --id %s --exact --source %s` ile koşulları inceleyip kabul ediyorsanız onaylayın, ardından ReAppKit'i yeniden deneyin", e.source, e.id, e.source)
+}
+
 func sourceAgreementError(id, source string) error {
-	return fmt.Errorf("WinGet source agreements require your review: run `winget list --id %s --exact --source %s` in PowerShell, review and accept the terms, then retry ReAppKit", id, source)
+	return &sourceReviewError{id: id, source: source}
 }
 
 // A generic installer failure alone does not prove an elevation cancellation.

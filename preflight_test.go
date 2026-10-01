@@ -103,6 +103,99 @@ func TestInstalledAppsDoNotRequireConnectivity(t *testing.T) {
 
 type unavailableRunner struct{ calls int }
 
+type sourceConsentExit int
+
+func (e sourceConsentExit) Error() string { return "source agreement pending" }
+func (e sourceConsentExit) ExitCode() int { return int(e) }
+
+type sourceConsentRunner struct {
+	consentRunner
+	accepted       bool
+	refuse         bool
+	prompts        int
+	queryDeadline  bool
+	promptDeadline bool
+}
+
+func (r *sourceConsentRunner) Run(ctx context.Context, args ...string) ([]byte, error) {
+	if args[0] == "list" && args[5] == "msstore" && !r.accepted {
+		_, r.queryDeadline = ctx.Deadline()
+		return nil, sourceConsentExit(-1978335162)
+	}
+	return r.consentRunner.Run(ctx, args...)
+}
+
+func (r *sourceConsentRunner) RunInteractive(ctx context.Context, input io.Reader, output io.Writer, args ...string) ([]byte, error) {
+	r.prompts++
+	_, r.promptDeadline = ctx.Deadline()
+	if args[0] != "list" || len(r.installs) != 0 {
+		return nil, errors.New("changes before source review")
+	}
+	fmtOutput := "Store source terms shown\n"
+	io.WriteString(output, fmtOutput)
+	if r.refuse {
+		return nil, sourceConsentExit(-1978335162)
+	}
+	r.accepted = true
+	return nil, sourceConsentExit(-1978335212)
+}
+
+func TestPreflightReviewsSourceBeforeUACAndChanges(t *testing.T) {
+	for _, refuse := range []bool{false, true} {
+		c, _ := sampleCommand(t)
+		r := &sourceConsentRunner{consentRunner: consentRunner{installed: map[string]bool{}}, refuse: refuse}
+		c.client = winget.New(r)
+		c.apps = append(c.apps, catalog.App{ID: "9NKSQGP7F2NH", Title: "WhatsApp", Source: "msstore", Scope: "user"})
+		c.selection.Apps = append(c.selection.Apps, ui.Choice{ID: "9NKSQGP7F2NH"})
+		c.checkStoreNetwork = func(context.Context) error { return nil }
+		var output strings.Builder
+		c.SetStdin(strings.NewReader("y\n"))
+		c.SetStdout(&output)
+		source, target := filepath.Join(t.TempDir(), "source"), filepath.Join(t.TempDir(), "target")
+		if err := os.WriteFile(source, []byte("new"), 0600); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(target, []byte("old"), 0600); err != nil {
+			t.Fatal(err)
+		}
+		c.settings = []catalog.Setting{{ID: "profile", Title: "Profile", Source: source, Target: target}}
+		c.selection.Settings = []ui.Choice{{ID: "setting:profile"}}
+		starts := 0
+		c.startAdmin = func(context.Context, []catalog.App) (adminSession, error) {
+			starts++
+			if !r.accepted || len(r.installs) != 0 {
+				t.Fatal("UAC or changes before source approval")
+			}
+			return &fakeAdmin{runner: &r.consentRunner}, nil
+		}
+		if err := c.Run(); err != nil {
+			t.Fatal(err)
+		}
+		if r.prompts != 1 || !r.queryDeadline || r.promptDeadline || !strings.Contains(output.String(), "Store source terms shown") {
+			t.Fatalf("prompts=%d query deadline=%v prompt deadline=%v output=%s", r.prompts, r.queryDeadline, r.promptDeadline, output.String())
+		}
+		data, err := os.ReadFile(target)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if refuse {
+			msg, ok := c.result.(ui.ExecutionErrorMsg)
+			if !ok || !errors.Is(msg.Err, errPreflightStopped) || starts != 0 || len(r.installs) != 0 || string(data) != "old" {
+				t.Fatalf("refusal result=%+v starts=%d installs=%v target=%s", c.result, starts, r.installs, data)
+			}
+		} else {
+			if starts != 1 || string(data) != "new" {
+				t.Fatalf("starts=%d target=%s", starts, data)
+			}
+			for _, row := range c.result.(ui.ResultsMsg).Results {
+				if row.Status != "succeeded" {
+					t.Fatalf("row=%+v", row)
+				}
+			}
+		}
+	}
+}
+
 func (r *unavailableRunner) Run(context.Context, ...string) ([]byte, error) {
 	r.calls++
 	return nil, errors.New("WinGet missing")

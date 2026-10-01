@@ -108,6 +108,6 @@ Sonuç raporları varsayılan olarak `%LOCALAPPDATA%\ReAppKit\runs` konumuna yaz
 
 ## Mevcut sınırlamalar
 
-Kaynak ve paket koşulları otomatik kabul edilmez. Ön kontrolde kaynak koşulları eksikse ReAppKit, yeniden denemeden önce çalıştırılacak PowerShell komutunu gösterir. Kurulum sırasında paket koşulları için WinGet aynı terminalde açık onayınızı ister; reddederseniz o uygulama kurulmaz. Bazı kurucular ek etkileşim isteyebilir; bağlantı kontrolü her indirmenin başarılı olacağını garanti etmez.
+Kaynak ve paket koşulları otomatik kabul edilmez. Ön kontrolde kaynak koşulları eksikse WinGet, kurulumdan ve ilk UAC isteğinden önce aynı terminalde koşulları gösterip onayınızı ister. Reddederseniz uygulama kurulumları ve dosya değişiklikleri başlamaz. Etkileşimli terminal kullanılamıyorsa koşulları incelemek için tam PowerShell komutu gösterilir. Kurulum sırasında paket koşulları için WinGet aynı terminalde açık onayınızı ister; reddederseniz o uygulama kurulmaz. Bazı kurucular ek etkileşim isteyebilir; bağlantı kontrolü her indirmenin başarılı olacağını garanti etmez.
 
 Uygulama hesabına giriş, ücretli lisanslar ve kişisel uygulama ayarları kurulumdan ayrı tamamlanır. Hazır Windows görünüm ve ses ayarları, tekrar kullanılabilir profiller ve yeniden başlatma sonrası devam henüz sunulmaz.

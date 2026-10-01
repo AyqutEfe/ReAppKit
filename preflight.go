@@ -69,10 +69,8 @@ func (c *executionCommand) preflight() ([]catalog.App, error) {
 	missingSources := make(map[string]bool)
 	for _, choice := range c.selection.Apps {
 		app := byID[choice.ID]
-		ctx, cancel := context.WithTimeout(c.ctx, 30*time.Second)
 		appClient := c.client.WithSource(app.Source)
-		installed, err := appClient.Installed(ctx, app.ID)
-		cancel()
+		installed, err := appClient.InstalledWithReview(c.ctx, app.ID)
 		if err != nil {
 			return nil, fmt.Errorf("uygulama ön kontrolü %s: %w", app.Title, err)
 		}
