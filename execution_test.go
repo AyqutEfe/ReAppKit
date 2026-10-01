@@ -56,6 +56,7 @@ func sampleCommand(t *testing.T) (*executionCommand, *consentRunner) {
 	r := &consentRunner{installed: map[string]bool{}}
 	apps := []catalog.App{{ID: "Git.Git", Title: "Git", Scope: "machine", RequiresAdmin: true}, {ID: "Obsidian.Obsidian", Title: "Obsidian", Scope: "user"}, {ID: "wez.wezterm", Title: "WezTerm", Scope: "auto", RequiresAdmin: true}}
 	c := &executionCommand{ctx: context.Background(), apps: apps, client: winget.New(r), resultsDir: t.TempDir(), stdout: io.Discard, selection: ui.Selection{Apps: []ui.Choice{{ID: "Git.Git"}, {ID: "Obsidian.Obsidian"}, {ID: "wez.wezterm"}}}}
+	c.checkNetwork = func(context.Context) error { return nil }
 	return c, r
 }
 func TestOneInitialApprovalThenSerialInstallationWithoutInput(t *testing.T) {

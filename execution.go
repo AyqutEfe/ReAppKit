@@ -26,6 +26,7 @@ type executionCommand struct {
 	stdout     io.Writer
 	result     tea.Msg
 	startAdmin func(context.Context, []catalog.App) (adminSession, error)
+	checkNetwork func(context.Context) error
 }
 
 var _ tea.ExecCommand = (*executionCommand)(nil)
@@ -43,24 +44,10 @@ func (c *executionCommand) Run() error {
 		c.result = ui.ExecutionErrorMsg{Err: err}
 		return nil
 	}
-	byID := make(map[string]catalog.App)
-	for _, app := range c.apps {
-		byID[app.ID] = app
-	}
-	var pending []catalog.App
-	for _, choice := range c.selection.Apps {
-		app := byID[choice.ID]
-		if !app.RequiresAdmin {
-			continue
-		}
-		installed, err := c.client.Installed(c.ctx, app.ID)
-		if err != nil {
-			c.result = ui.ExecutionErrorMsg{Err: fmt.Errorf("yönetici ön kontrolü %s: %w", app.Title, err)}
-			return nil
-		}
-		if !installed {
-			pending = append(pending, app)
-		}
+	pending, err := c.preflight()
+	if err != nil {
+		c.result = ui.ExecutionErrorMsg{Err: fmt.Errorf("%w: %w", errPreflightStopped, err)}
+		return nil
 	}
 	var admin adminSession
 	if len(pending) > 0 {

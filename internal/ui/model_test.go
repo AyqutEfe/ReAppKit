@@ -104,3 +104,32 @@ func TestSummaryIncludesAdminWarningWhenMachineAppSelected(t *testing.T) {
 		t.Fatalf("summaryActionLine = %d, want 11", got)
 	}
 }
+
+func TestSummaryPreservesLongPreflightErrorAndMouseRetry(t *testing.T) {
+	calls := 0
+	m := NewModel(nil, nil, func(Selection) tea.Cmd {
+		calls++
+		return func() tea.Msg { return ResultsMsg{} }
+	})
+	m.screen = summaryScreen
+	m.width = 48
+	m.message = "Ön kontrol tamamlanamadı; hiçbir değişiklik başlatılmadı. App Installer kurulumunu kontrol edin ve PowerShell'de winget --version çalıştırın."
+	lines := strings.Split(m.View().Content, "\n")
+	if !strings.Contains(strings.Join(lines, " "), "winget --version çalıştırın.") {
+		t.Fatalf("error guidance truncated: %v", lines)
+	}
+	buttonLine := -1
+	for i, line := range lines {
+		if strings.Contains(line, "[Enter ile onayla ve başlat]") {
+			buttonLine = i
+			break
+		}
+	}
+	if buttonLine < 0 || m.summaryActionLine() != buttonLine {
+		t.Fatalf("mouse line=%d rendered line=%d", m.summaryActionLine(), buttonLine)
+	}
+	_, cmd := m.Update(tea.MouseClickMsg(tea.Mouse{X: 40, Y: buttonLine, Button: tea.MouseLeft}))
+	if calls != 1 || cmd == nil {
+		t.Fatalf("retry calls=%d command=%v", calls, cmd)
+	}
+}

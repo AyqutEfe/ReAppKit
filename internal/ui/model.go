@@ -337,7 +337,7 @@ func (m Model) summaryActionLine() int {
 		line += 2
 	}
 	if m.message != "" {
-		line += 2
+		line += 1 + len(wrap(m.message, m.width-1))
 	}
 	return line
 }
@@ -444,7 +444,10 @@ func (m Model) writeSummary(b *strings.Builder) {
 		b.WriteString("\nİşlem sürüyor…\n")
 	}
 	if m.message != "" {
-		fmt.Fprintf(b, "\n%s\n", fit(m.message, m.width-1))
+		b.WriteString("\n")
+		for _, line := range wrap(m.message, m.width-1) {
+			fmt.Fprintln(b, line)
+		}
 	}
 	b.WriteString("\n[← Geri]   [Enter ile onayla ve başlat]\n\n←/Backspace geri · Enter onay · q çık\n")
 }
