@@ -16,10 +16,12 @@ var starterApps []byte
 
 // App is one exact WinGet package offered on the first selection screen.
 type App struct {
-	ID          string `json:"id"`
-	Title       string `json:"title"`
-	Description string `json:"description"`
-	Category    string `json:"category"`
+	ID            string `json:"id"`
+	Title         string `json:"title"`
+	Description   string `json:"description"`
+	Category      string `json:"category"`
+	Scope         string `json:"scope,omitempty"`
+	RequiresAdmin bool   `json:"requires_admin,omitempty"`
 }
 
 // Setting describes a user-supplied file configuration. ReAppKit does not
@@ -48,9 +50,20 @@ func LoadApps(path string) ([]App, error) {
 		return nil, fmt.Errorf("parse app catalog: %w", err)
 	}
 	seen := make(map[string]bool, len(apps))
-	for i, app := range apps {
+	for i := range apps {
+		app := &apps[i]
 		if invalidID(app.ID) || strings.TrimSpace(app.Title) == "" {
 			return nil, fmt.Errorf("app %d needs a valid exact package ID and title", i+1)
+		}
+		if app.Scope == "" {
+			app.Scope = "user"
+		}
+		if app.Scope != "user" && app.Scope != "machine" && app.Scope != "auto" {
+			return nil, fmt.Errorf("app %d has invalid scope %q (must be user, machine or auto)", i+1, app.Scope)
+		}
+		// Automatic scope may select an admin installer; require the UI warning.
+		if app.Scope == "machine" || app.Scope == "auto" {
+			app.RequiresAdmin = true
 		}
 		if seen[strings.ToLower(app.ID)] {
 			return nil, fmt.Errorf("duplicate app ID %q", app.ID)

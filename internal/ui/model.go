@@ -9,10 +9,11 @@ import (
 
 // Choice is a display-only option. It contains no executable action.
 type Choice struct {
-	ID          string
-	Title       string
-	Description string
-	Category    string
+	ID            string
+	Title         string
+	Description   string
+	Category      string
+	RequiresAdmin bool
 }
 
 // Selection is the user's chosen input for the two selection screens.
@@ -54,16 +55,16 @@ const (
 
 // Model owns the UI state. It never performs system changes itself.
 type Model struct {
-	apps       []Choice
-	settings   []Choice
-	selected   map[string]bool
-	confirm    ConfirmFunc
-	screen     screen
-	cursor     int
-	width      int
-	busy       bool
-	results    []Result
-	message    string
+	apps     []Choice
+	settings []Choice
+	selected map[string]bool
+	confirm  ConfirmFunc
+	screen   screen
+	cursor   int
+	width    int
+	busy     bool
+	results  []Result
+	message  string
 }
 
 // NewModel creates the UI with caller-provided catalog data. Passing a nil
@@ -131,21 +132,30 @@ func (m Model) updateKey(key string) (tea.Model, tea.Cmd) {
 	if key == "ctrl+c" || key == "q" {
 		return m, tea.Quit
 	}
-	if m.busy { return m, nil }
+	if m.busy {
+		return m, nil
+	}
 	switch m.screen {
 	case appsScreen, settingsScreen:
 		items := m.currentChoices()
 		switch key {
 		case "up", "k":
-			if m.cursor > 0 { m.cursor-- }
+			if m.cursor > 0 {
+				m.cursor--
+			}
 		case "down", "j":
-			if m.cursor < len(items)-1 { m.cursor++ }
+			if m.cursor < len(items)-1 {
+				m.cursor++
+			}
 		case " ", "space", "enter":
 			m.toggleCursor()
 		case "right", "tab", "n":
 			m.nextScreen()
 		case "left", "backspace", "b":
-			if m.screen == settingsScreen { m.screen = appsScreen; m.cursor = clampCursor(m.cursor, len(m.apps)) }
+			if m.screen == settingsScreen {
+				m.screen = appsScreen
+				m.cursor = clampCursor(m.cursor, len(m.apps))
+			}
 		}
 	case summaryScreen:
 		switch key {
@@ -161,13 +171,17 @@ func (m Model) updateKey(key string) (tea.Model, tea.Cmd) {
 			m.message = "Yeniden onaylarsan tamamlanmış işler durum kontrolüyle atlanır."
 			return m, nil
 		}
-		if key == "enter" || key == "esc" { return m, tea.Quit }
+		if key == "enter" || key == "esc" {
+			return m, tea.Quit
+		}
 	}
 	return m, nil
 }
 
 func (m Model) confirmSelection() (tea.Model, tea.Cmd) {
-	if m.busy { return m, nil }
+	if m.busy {
+		return m, nil
+	}
 	m.busy = true
 	m.message = ""
 	if m.confirm == nil {
@@ -186,15 +200,25 @@ func (m Model) confirmSelection() (tea.Model, tea.Cmd) {
 
 func demoResults(sel Selection) []Result {
 	rows := make([]Result, 0, len(sel.Apps)+len(sel.Settings))
-	for _, c := range sel.Apps { rows = append(rows, Result{ID:c.ID, Title:c.Title, Status:"Demo", Message:"Bu örnek akışta kurulmadı."}) }
-	for _, c := range sel.Settings { rows = append(rows, Result{ID:c.ID, Title:c.Title, Status:"Demo", Message:"Bu örnek akışta değiştirilmedi."}) }
-	if len(rows) == 0 { rows = append(rows, Result{Title:"Seçim yok", Status:"Bilgi", Message:"Herhangi bir işlem seçilmedi."}) }
+	for _, c := range sel.Apps {
+		rows = append(rows, Result{ID: c.ID, Title: c.Title, Status: "Demo", Message: "Bu örnek akışta kurulmadı."})
+	}
+	for _, c := range sel.Settings {
+		rows = append(rows, Result{ID: c.ID, Title: c.Title, Status: "Demo", Message: "Bu örnek akışta değiştirilmedi."})
+	}
+	if len(rows) == 0 {
+		rows = append(rows, Result{Title: "Seçim yok", Status: "Bilgi", Message: "Herhangi bir işlem seçilmedi."})
+	}
 	return rows
 }
 
 func (m Model) updateMouse(msg tea.MouseClickMsg) (tea.Model, tea.Cmd) {
-	if m.busy { return m, nil }
-	if msg.Button != tea.MouseLeft { return m, nil }
+	if m.busy {
+		return m, nil
+	}
+	if msg.Button != tea.MouseLeft {
+		return m, nil
+	}
 	y := msg.Y
 	switch m.screen {
 	case appsScreen, settingsScreen:
@@ -211,48 +235,81 @@ func (m Model) updateMouse(msg tea.MouseClickMsg) (tea.Model, tea.Cmd) {
 		}
 		navLine := firstChoiceLine + displayedRows + 2
 		if y == navLine {
-			if msg.X < m.width/2 && m.screen == settingsScreen { m.screen = appsScreen; m.cursor = clampCursor(m.cursor, len(m.apps)); return m, nil }
+			if msg.X < m.width/2 && m.screen == settingsScreen {
+				m.screen = appsScreen
+				m.cursor = clampCursor(m.cursor, len(m.apps))
+				return m, nil
+			}
 			m.nextScreen()
 		}
 	case summaryScreen:
 		navLine := m.summaryActionLine()
 		if y == navLine {
-			if msg.X < m.width/2 { m.screen = settingsScreen; m.cursor = clampCursor(m.cursor, len(m.settings)); return m, nil }
+			if msg.X < m.width/2 {
+				m.screen = settingsScreen
+				m.cursor = clampCursor(m.cursor, len(m.settings))
+				return m, nil
+			}
 			return m.confirmSelection()
 		}
 	case resultsScreen:
-		if y == 4 { return m, tea.Quit }
+		if y == 4 {
+			return m, tea.Quit
+		}
 	}
 	return m, nil
 }
 
 func (m *Model) nextScreen() {
-	if m.screen == appsScreen { m.screen = settingsScreen; m.cursor = clampCursor(m.cursor, len(m.settings)); return }
-	if m.screen == settingsScreen { m.screen = summaryScreen; m.cursor = 0 }
+	if m.screen == appsScreen {
+		m.screen = settingsScreen
+		m.cursor = clampCursor(m.cursor, len(m.settings))
+		return
+	}
+	if m.screen == settingsScreen {
+		m.screen = summaryScreen
+		m.cursor = 0
+	}
 }
 
 func (m Model) currentChoices() []Choice {
-	if m.screen == settingsScreen { return m.settings }
+	if m.screen == settingsScreen {
+		return m.settings
+	}
 	return m.apps
 }
 
 func (m *Model) toggleCursor() {
 	items := m.currentChoices()
-	if m.cursor < 0 || m.cursor >= len(items) { return }
+	if m.cursor < 0 || m.cursor >= len(items) {
+		return
+	}
 	id := selectionKey(m.screen, items[m.cursor].ID)
-	if id == "" { return }
+	if id == "" {
+		return
+	}
 	m.selected[id] = !m.selected[id]
 }
 
 func (m Model) selection() Selection {
 	var s Selection
-	for _, c := range m.apps { if m.selected[selectionKey(appsScreen, c.ID)] { s.Apps = append(s.Apps, c) } }
-	for _, c := range m.settings { if m.selected[selectionKey(settingsScreen, c.ID)] { s.Settings = append(s.Settings, c) } }
+	for _, c := range m.apps {
+		if m.selected[selectionKey(appsScreen, c.ID)] {
+			s.Apps = append(s.Apps, c)
+		}
+	}
+	for _, c := range m.settings {
+		if m.selected[selectionKey(settingsScreen, c.ID)] {
+			s.Settings = append(s.Settings, c)
+		}
+	}
 	return s
 }
 
 func selectionKey(which screen, id string) string {
-	if which == settingsScreen { return "setting:" + id }
+	if which == settingsScreen {
+		return "setting:" + id
+	}
 	return "app:" + id
 }
 
@@ -260,10 +317,28 @@ func (m Model) summaryActionLine() int {
 	sel := m.selection()
 	selected := len(sel.Apps) + len(sel.Settings)
 	line := 7 + selected
-	if selected == 0 { line++ } // empty-selection explanation
-	if m.confirm == nil { line++ } // demo-mode explanation
-	if m.busy { line += 2 }
-	if m.message != "" { line += 2 }
+	if selected == 0 {
+		line++
+	} // empty-selection explanation
+	hasAdmin := false
+	for _, c := range sel.Apps {
+		if c.RequiresAdmin {
+			hasAdmin = true
+			break
+		}
+	}
+	if hasAdmin {
+		line += 2
+	}
+	if m.confirm == nil {
+		line++
+	} // demo-mode explanation
+	if m.busy {
+		line += 2
+	}
+	if m.message != "" {
+		line += 2
+	}
 	return line
 }
 
@@ -271,9 +346,15 @@ func (m Model) summaryActionLine() int {
 func (m Model) Selected() Selection { return m.selection() }
 
 func clampCursor(cursor, length int) int {
-	if length == 0 { return 0 }
-	if cursor >= length { return length-1 }
-	if cursor < 0 { return 0 }
+	if length == 0 {
+		return 0
+	}
+	if cursor >= length {
+		return length - 1
+	}
+	if cursor < 0 {
+		return 0
+	}
 	return cursor
 }
 
@@ -297,34 +378,74 @@ func (m Model) View() tea.View {
 
 func (m Model) writeChoices(b *strings.Builder, title, step string, items []Choice, help string, canBack bool) {
 	fmt.Fprintf(b, "ReAppKit · %s\n\n%s\n\n%s\n\n", title, step, help)
-	if len(items) == 0 { b.WriteString("  Bu bölümde örnek bulunmuyor.\n") }
+	if len(items) == 0 {
+		b.WriteString("  Bu bölümde örnek bulunmuyor.\n")
+	}
 	for i, c := range items {
 		cursor := "  "
-		if i == m.cursor { cursor = "› " }
+		if i == m.cursor {
+			cursor = "› "
+		}
 		check := "[ ]"
 		which := appsScreen
-		if m.screen == settingsScreen { which = settingsScreen }
-		if m.selected[selectionKey(which, c.ID)] { check = "[x]" }
+		if m.screen == settingsScreen {
+			which = settingsScreen
+		}
+		if m.selected[selectionKey(which, c.ID)] {
+			check = "[x]"
+		}
 		label := c.Title
-		if c.Category != "" { label += "  ·  " + c.Category }
+		if c.Category != "" {
+			label += "  ·  " + c.Category
+		}
+		if c.RequiresAdmin {
+			label += "  [Yönetici]"
+		}
 		fmt.Fprintf(b, "%s%s %s\n", cursor, check, fit(label, m.width-10))
 	}
 	fmt.Fprintf(b, "\nSeçili: %d\n", len(m.currentSelection()))
-	if canBack { b.WriteString("[← Geri]   ") }
-	if m.screen == appsScreen { b.WriteString("[Devam →]") } else { b.WriteString("[Özeti göster →]") }
+	if canBack {
+		b.WriteString("[← Geri]   ")
+	}
+	if m.screen == appsScreen {
+		b.WriteString("[Devam →]")
+	} else {
+		b.WriteString("[Özeti göster →]")
+	}
 	b.WriteString("\n\n↑/↓ gezin · Space seç · q çık\n")
 }
 
 func (m Model) writeSummary(b *strings.Builder) {
 	sel := m.selection()
 	fmt.Fprintf(b, "ReAppKit · Özet\n\nSeçilen işlemler: %d uygulama, %d ayar\n\n", len(sel.Apps), len(sel.Settings))
-	if len(sel.Apps) == 0 && len(sel.Settings) == 0 { b.WriteString("  Hiçbir işlem seçilmedi.\n") }
-	for _, c := range sel.Apps { fmt.Fprintf(b, "  • Uygulama: %s\n", fit(c.Title, m.width-16)) }
-	for _, c := range sel.Settings { fmt.Fprintf(b, "  • Ayar: %s\n", fit(c.Title, m.width-16)) }
+	if len(sel.Apps) == 0 && len(sel.Settings) == 0 {
+		b.WriteString("  Hiçbir işlem seçilmedi.\n")
+	}
+	hasAdmin := false
+	for _, c := range sel.Apps {
+		adminTag := ""
+		if c.RequiresAdmin {
+			adminTag = " (Yönetici izni / UAC gerektirir)"
+			hasAdmin = true
+		}
+		fmt.Fprintf(b, "  • Uygulama: %s%s\n", fit(c.Title, m.width-16-len(adminTag)), adminTag)
+	}
+	for _, c := range sel.Settings {
+		fmt.Fprintf(b, "  • Ayar: %s\n", fit(c.Title, m.width-16))
+	}
+	if hasAdmin {
+		b.WriteString("\n⚠️ Başlangıçta tek Windows UAC onayı alınır; ardından kurulumlar sırayla sürer.\n")
+	}
 	b.WriteString("\nEnter ile açıkça onaylayınca işlem başlatılır.\n")
-	if m.confirm == nil { b.WriteString("Demo modu: sistemde değişiklik yapılmaz.\n") }
-	if m.busy { b.WriteString("\nİşlem sürüyor…\n") }
-	if m.message != "" { fmt.Fprintf(b, "\n%s\n", fit(m.message, m.width-1)) }
+	if m.confirm == nil {
+		b.WriteString("Demo modu: sistemde değişiklik yapılmaz.\n")
+	}
+	if m.busy {
+		b.WriteString("\nİşlem sürüyor…\n")
+	}
+	if m.message != "" {
+		fmt.Fprintf(b, "\n%s\n", fit(m.message, m.width-1))
+	}
 	b.WriteString("\n[← Geri]   [Enter ile onayla ve başlat]\n\n←/Backspace geri · Enter onay · q çık\n")
 }
 
@@ -333,7 +454,9 @@ func (m Model) writeResults(b *strings.Builder) {
 	showSourceHint := false
 	for _, r := range m.results {
 		title := r.Title
-		if title == "" { title = r.ID }
+		if title == "" {
+			title = r.ID
+		}
 		fmt.Fprintf(b, "  [%s] %s\n", r.Status, fit(title, m.width-14))
 		if r.Message != "" {
 			for _, line := range wrap(r.Message, m.width-8) {
@@ -345,36 +468,55 @@ func (m Model) writeResults(b *strings.Builder) {
 			}
 		}
 	}
-	if len(m.results) == 0 { b.WriteString("  İşlem sonucu bulunmuyor.\n") }
+	if len(m.results) == 0 {
+		b.WriteString("  İşlem sonucu bulunmuyor.\n")
+	}
 	if showSourceHint {
 		for i, line := range wrap("Microsoft Store kaynak koşullarını incelemek için PowerShell'de `winget list --id Google.Chrome --exact` çalıştırıp etkileşimli istemi yanıtla; ardından r ile tekrar dene.", m.width-1) {
-			if i == 0 { b.WriteString("\n") }
+			if i == 0 {
+				b.WriteString("\n")
+			}
 			b.WriteString(line + "\n")
 		}
 	}
-	if m.confirm == nil { b.WriteString("\nDemo modu: bu oturum sistemde değişiklik yapmadı.\n") }
-	if m.confirm != nil { b.WriteString("\nr: yeniden denemek için özete dön.\n") }
+	if m.confirm == nil {
+		b.WriteString("\nDemo modu: bu oturum sistemde değişiklik yapmadı.\n")
+	}
+	if m.confirm != nil {
+		b.WriteString("\nr: yeniden denemek için özete dön.\n")
+	}
 	b.WriteString("\nEnter veya q ile çık.\n")
 }
 
 func (m Model) currentSelection() []Choice {
-	if m.screen == settingsScreen { return m.selection().Settings }
+	if m.screen == settingsScreen {
+		return m.selection().Settings
+	}
 	return m.selection().Apps
 }
 
 func fit(s string, width int) string {
-	if width < 4 { return s }
-	if len([]rune(s)) <= width { return s }
+	if width < 4 {
+		return s
+	}
+	if len([]rune(s)) <= width {
+		return s
+	}
 	r := []rune(s)
 	return string(r[:width-1]) + "…"
 }
 
 func wrap(s string, width int) []string {
-	if width < 4 { return []string{s} }
+	if width < 4 {
+		return []string{s}
+	}
 	var lines []string
 	for _, paragraph := range strings.Split(s, "\n") {
 		words := strings.Fields(paragraph)
-		if len(words) == 0 { lines = append(lines, ""); continue }
+		if len(words) == 0 {
+			lines = append(lines, "")
+			continue
+		}
 		line := words[0]
 		for _, word := range words[1:] {
 			if len([]rune(line))+1+len([]rune(word)) > width {

@@ -87,3 +87,20 @@ func TestResultsWrapWinGetAgreementErrorAndShowInteractiveHint(t *testing.T) {
 		t.Fatalf("interactive agreement hint missing: %s", view)
 	}
 }
+
+func TestSummaryIncludesAdminWarningWhenMachineAppSelected(t *testing.T) {
+	m := NewModel([]Choice{{ID: "wez.wezterm", Title: "WezTerm", RequiresAdmin: true}}, nil, nil)
+	m, _ = press(m, tea.KeyPressMsg(tea.Key{Code: tea.KeySpace}))
+	m, _ = press(m, tea.KeyPressMsg(tea.Key{Code: tea.KeyTab}))
+	m, _ = press(m, tea.KeyPressMsg(tea.Key{Code: tea.KeyTab}))
+	if m.screen != summaryScreen {
+		t.Fatalf("screen = %v, want summary", m.screen)
+	}
+	view := m.View().Content
+	if !strings.Contains(view, "Yönetici") && !strings.Contains(view, "UAC") {
+		t.Fatalf("summary view missing UAC warning: %s", view)
+	}
+	if got := m.summaryActionLine(); got != 11 {
+		t.Fatalf("summaryActionLine = %d, want 11", got)
+	}
+}

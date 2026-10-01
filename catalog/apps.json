@@ -13,14 +13,24 @@
   },
   {
     "id": "Git.Git",
-    "title": "Git",
-    "description": "Sürüm kontrol aracı.",
-    "category": "Geliştirme"
+    "title": "Git (tüm kullanıcılar)",
+    "description": "Sürüm kontrol aracı (tüm kullanıcılar için).",
+    "scope": "machine",
+    "category": "Geliştirme",
+    "requires_admin": true
   },
   {
     "id": "Obsidian.Obsidian",
     "title": "Obsidian",
     "description": "Yerel Markdown not uygulaması.",
     "category": "Üretkenlik"
+  },
+  {
+    "id": "wez.wezterm",
+    "title": "WezTerm",
+    "description": "GPU hızlandırmalı terminal emülatörü.",
+    "category": "Geliştirme",
+    "scope": "auto",
+    "requires_admin": true
   }
 ]

@@ -20,3 +20,14 @@
 *.p12
 *.pem
 *.key
+
+# IDEs and editor configurations
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS generated files
+Thumbs.db
+desktop.ini
+.DS_Store

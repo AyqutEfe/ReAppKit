@@ -7,7 +7,7 @@ ReAppKit, Windows bilgisayarı uygulamalar ve kişisel ayarlar için iki termina
 ## Mevcut MVP
 
 - Windows 11 x64 hedeflenir. Derlenen çalıştırılabilir dosyanın hedef bilgisayarda Go kurulumuna ihtiyacı yoktur.
-- Başlangıç WinGet kataloğunda Chrome, VS Code, Git ve Obsidian bulunur. WezTerm'in WinGet kurucusu kullanıcı kapsamını desteklemediği için ayrı ve açık onaylı yönetici aşamasına ertelendi. Farklı bir JSON uygulama kataloğu verilebilir.
+- Başlangıç WinGet kataloğunda Chrome, VS Code, Git, Obsidian ve WezTerm bulunur. WezTerm `scope: "auto"` kullanır: WinGet komutuna `--scope` gönderilmez; kurucu yönetici izni gerektirir ve arayüzde işaretlenir. Farklı bir JSON uygulama kataloğu verilebilir.
 - Program varsayılan olarak **demo modunda** açılır. Seçim, özet ve sonuç akışını gösterir; bilgisayarı değiştirmez.
 - `--apply`, ancak kullanıcı seçim yapıp özet ekranında ayrıca onay verince gerçek işlemleri açar. Uygulamalar kullanıcı kapsamında kurulmaya çalışılır. Kurulu olanlar atlanır; bir işin hatası bağımsız işleri durdurmaz.
 - İsteğe bağlı ayar kataloğu, kullanıcının verdiği yapılandırma dosyalarını kopyalar. Hedef dosya varsa değiştirmeden önce yanında yedek oluşturur. Kişisel kaynak ve hedef yolları bilinmediği için hazır ayar sunulmaz.
@@ -48,4 +48,25 @@ Kaynak ve hedefi kendi bilgisayarındaki mutlak yollarla değiştir. `requires_a
 
 ## Şimdiki sınırlar
 
-Arayüze yalnız kullanıcı kapsamındaki uygulama kurulumları ve açıkça tanımlanmış dosya kopyalama ayarları bağlıdır. Yönetici izni isteyen ayrı aşama, profiller, yeniden başlatma sonrası devam ve Windows ses/kayıt defteri ayarları henüz yoktur. Bazı üçüncü taraf yükleyiciler yine de yönetici izni isteyebilir; devam etmek istemiyorsan bu istemi iptal et. Uygulama kurulumu için WinGet gerekir. Ayrı lisans kabulü isteyen paketler etkileşimsiz modda başarısız olabilir; ReAppKit paket anlaşmalarını otomatik kabul etmez. Sonuç ekranındaki `r`, özete dönüp yeniden onaylama olanağı verir; tamamlanmış işler kontrol edilip atlanır. Onay öncesi kurulu durumu gösterme henüz yoktur. Yerel dosya kopyalama akışı doğrulandı. Windows VM'de Chrome, VS Code, Git ve Obsidian kurulum işleri başarı bildirdi; tekrar çalıştırma ve temiz Windows kabulü açık kaldı. Windows Uygulama Denetimi ilk yerel derlemeyi engelledi, sonraki imzasız derleme geliştirme bilgisayarında açıldı; bu nedenle çalıştırma davranışı her cihazda doğrulanmalıdır.
+Chrome, VS Code ve Obsidian kullanıcı kapsamında, Git tüm kullanıcılar için machine kapsamında kurulur. Katalogdaki `scope` alanı `user`, `machine` veya `auto` olabilir; boş alan `user` olur. `auto` kurucu seçimini WinGet’e bırakır, kullanıcı kapsamı garantisi vermez ve yönetici uyarısı gösterir. Kurulum başlamadan tek Windows UAC onayı alınır; normal uygulamalar kullanıcı sürecinde, yönetici işleri geçici yönetici işçisinde sırayla çalışır. Profiller, yeniden başlatma sonrası devam ve Windows ses/kayıt defteri ayarları henüz yoktur. Bazı üçüncü taraf yükleyiciler yine de yönetici izni isteyebilir; devam etmek istemiyorsan bu istemi iptal et. Uygulama kurulumu için WinGet gerekir. Ayrı lisans kabulü isteyen paketler etkileşimsiz modda başarısız olabilir; ReAppKit paket anlaşmalarını otomatik kabul etmez. Sonuç ekranındaki `r`, özete dönüp yeniden onaylama olanağı verir; tamamlanmış işler kontrol edilip atlanır. Onay öncesi kurulu durumu gösterme henüz yoktur. Yerel dosya kopyalama akışı doğrulandı. Windows VM'de Chrome, VS Code, Git ve Obsidian kurulum işleri başarı bildirdi; tekrar çalıştırma ve temiz Windows kabulü açık kaldı. Windows Uygulama Denetimi ilk yerel derlemeyi engelledi, sonraki imzasız derleme geliştirme bilgisayarında açıldı; bu nedenle çalıştırma davranışı her cihazda doğrulanmalıdır.
+
+
+## WezTerm kapsam düzeltmesi — 30 Eylül 2026
+
+WezTerm `scope: "auto"` kullanır; kurulum komutuna `--scope` gönderilmez ve yönetici uyarısı korunur. Önceki VM denemesinde zorlanan kapsamla `0x8a150010` görüldü. Düzeltmenin gerçek kurulum ve UAC davranışı VM'de henüz doğrulanmadı; ayrı yönetici aşaması uygulanmış değildir. Önceki doğrulama kaydındaki dört uygulamalı katalog bu değişiklikten önceki durumu anlatır.
+
+VM PowerShell'de önce `winget install --id wez.wezterm --exact --source winget` ile kapsam belirtmeden dene. Ardından yeni derlemede yalnız WezTerm'i seçerek kurulumu ve tekrar çalıştırmada `skipped` sonucunu doğrula. İlk komut da başarısız olursa `winget --info`, `winget show --id wez.wezterm --exact --source winget` çıktısını ve hatanın işaret ettiği WinGet günlüğünü incele.
+
+Yerel doğrulama: `go vet ./...` ve derleme başarılı. Ana program, katalog, core, settings ve UI testleri geçti. WinGet test çalıştırılabilirini Windows Uygulama Denetimi engelledi; bu paketin testleri derlendi ancak çalıştırılamadı.
+
+
+## Ayrı yönetici onayı — 30 Eylül 2026
+
+Git kurucusu kullanıcı kapsamında da UAC isteyebilir. Git ve WezTerm yönetici aşamasında işaretlenir. Özet onayından sonra terminal arayüzü duraklatılır; önce normal uygulamalar, sonra yönetici işleri ve son olarak dosya ayarları çalışır. Kurulu olmayan her yönetici uygulamasından hemen önce `e` ve Enter ile devam, `h` ile vazgeçme onayı alınır. Windows UAC penceresi çıkınca ayrıca onaylanmalıdır; görünmüyorsa görev çubuğunu veya Alt+Tab'ı kontrol et. Kurulu uygulamalar bu onaydan önce kontrol edilip atlanır. Vazgeçilen işin bağımlı ayarları engellenir; bağımsız işler devam eder. Kurucu iptali okunabilir izin iptali açıklaması verir; kendiliğinden yeniden denenmez. UAC otomatik kabul edilmez, uygulamanın tamamı yönetici olarak çalıştırılmaz. Git'in kullanıcı kapsamı ve WezTerm'in kapsamsız komutu korunur.
+
+Önceki açıklamalardaki “ayrı yönetici aşaması uygulanmadı” sınırı bu sürümde ayrı kullanıcı onayı bakımından güncellenmiştir; programatik UAC yükseltmesi uygulanmış değildir. Temiz VM'de toplu kurulum ve gerçek izin penceresi görünürlüğü henüz doğrulanmadı.
+
+
+## Başlangıçta tek UAC onayı — 30 Eylül 2026
+
+Bu akış önceki uygulama başına e/h sorularının yerini alır. Özet onayından sonra kurulu yönetici uygulamaları kontrol edilir. Eksik iş varsa bilgisayarda değişiklik başlamadan bir kez Windows yönetici onayı alınır ve geçici yönetici işçisi başlatılır. Normal uygulamalar ilk kullanıcı sürecinde kalır; yönetici işleri ayrı süreçte sırayla çalışır. Git artık tüm kullanıcılar için machine kapsamında kurulur; WezTerm auto kapsamını korur. İşçi yalnız seçilmiş machine/auto yönetici paketlerini kabul eder ve oturum sonunda kapanır. Kalıcı servis veya UAC ilkesi değişikliği yapılmaz. İlk UAC iptal edilirse kurulum ve dosya değişikliği başlamaz. Bütün yönetici uygulamaları zaten kuruluysa yükseltme istenmez. Ek lisans veya etkileşimli kurucu adımı isteyen başka paketler başarısız olabilir; gelecekteki her paketin gözetimsiz çalışması garanti değildir. Gerçek yükseltme ve temiz VM denemesi kabul testidir.
